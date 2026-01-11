@@ -1,8 +1,8 @@
 import axios from 'axios';
+import { supabaseAdmin } from '../supabase.js';
 import { facebookService } from './facebook.js';
 import { geminiService } from './gemini.js';
 import { logActivity } from '../logger.js';
-import { supabaseAdmin } from '../supabase.js';
 
 /**
  * Autonomous Bot Service
