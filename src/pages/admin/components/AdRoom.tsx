@@ -79,6 +79,7 @@ const AdRoom = () => {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'adroom_strategies' },
         (payload) => {
+             console.log('Strategy update:', payload);
              // Refresh strategy status
              fetchDashboardData();
         }
