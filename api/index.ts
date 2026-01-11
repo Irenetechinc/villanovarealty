@@ -1,10 +1,10 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import propertiesRouter from './routes/properties.js';
-import authRouter from './routes/auth.js';
-import analyticsRouter from './routes/analytics.js';
 import adroomRouter from './routes/adroom.js';
+import analyticsRouter from './routes/analytics.js';
+import authRouter from './routes/auth.js';
+import propertiesRouter from './routes/properties.js';
 import walletRouter from './routes/wallet.js';
 import { automation } from './cron.js';
 import { botService } from './services/botService.js';
