@@ -1,7 +1,7 @@
-import { supabaseAdmin } from '../supabase';
-import { facebookService } from './facebook';
-import { geminiService } from './gemini';
-import { logActivity } from '../logger';
+import { supabaseAdmin } from '../supabase.ts';
+import { facebookService } from './facebook.ts';
+import { geminiService } from './gemini.ts';
+import { logActivity } from '../logger.ts';
 
 export const adRoomService = {
   /**
