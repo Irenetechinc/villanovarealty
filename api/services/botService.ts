@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { supabaseAdmin } from '../supabase.ts';
-import { facebookService } from './facebook.ts';
-import { geminiService } from './gemini.ts';
-import { logActivity } from '../logger.ts';
+import { supabaseAdmin } from '../supabase';
+import { facebookService } from './facebook';
+import { geminiService } from './gemini';
+import { logActivity } from '../logger';
 
 /**
  * Autonomous Bot Service

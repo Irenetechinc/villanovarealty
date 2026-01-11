@@ -1,13 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import propertiesRouter from './routes/properties.ts';
-import authRouter from './routes/auth.ts';
-import analyticsRouter from './routes/analytics.ts';
-import adroomRouter from './routes/adroom.ts';
-import walletRouter from './routes/wallet.ts';
-import { automation } from './cron.ts';
-import { botService } from './services/botService.ts';
+import propertiesRouter from './routes/properties.js';
+import authRouter from './routes/auth.js';
+import analyticsRouter from './routes/analytics.js';
+import adroomRouter from './routes/adroom.js';
+import walletRouter from './routes/wallet.js';
+import { automation } from './cron.js';
+import { botService } from './services/botService.js';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
