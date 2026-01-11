@@ -1,8 +1,8 @@
 import cron from 'node-cron';
-import { supabaseAdmin } from './supabase.ts';
-import { facebookService } from './services/facebook.ts';
-import { logActivity } from './logger.ts';
-import { adRoomService } from './services/adRoomService.ts';
+import { supabaseAdmin } from './supabase.js';
+import { facebookService } from './services/facebook.js';
+import { logActivity } from './logger.js';
+import { adRoomService } from './services/adRoomService.js';
 
 // Run every minute to check for due posts
 cron.schedule('* * * * *', async () => {
