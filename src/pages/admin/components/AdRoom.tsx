@@ -548,6 +548,42 @@ const AdRoom = () => {
     }
   };
 
+  const handleCancelCampaign = async () => {
+    if (!window.confirm('Are you sure you want to cancel the current campaign? This will stop all pending posts.')) return;
+    
+    setIsLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
+
+      const response = await fetch(`${API_PREFIX}/adroom/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ admin_id: user?.id })
+      });
+
+      if (response.ok) {
+        setActiveStrategy(null);
+        setBotStatus('idle');
+        setMessages(prev => [...prev, {
+          id: 'cancel-' + Date.now(),
+          role: 'adroom',
+          content: 'Campaign cancelled successfully. I am now idle and awaiting further instructions.',
+          type: 'text',
+          timestamp: new Date()
+        }]);
+      } else {
+        throw new Error('Failed to cancel campaign');
+      }
+    } catch (error) {
+      console.error('Cancel error:', error);
+      alert('Failed to cancel campaign. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-white relative">
       {/* Header */}

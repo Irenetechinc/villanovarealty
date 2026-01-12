@@ -21,9 +21,9 @@ export const botService = {
     // Initial sync of processed IDs from DB to avoid re-replying on restart
     this.syncProcessedIds();
 
-    // REDUCED POLLING: Fallback only (every 5 minutes instead of 10s)
+    // REDUCED POLLING: Fallback only (every 30 minutes instead of 10s)
     // Primary trigger should be Webhooks to save API quota
-    setInterval(() => this.monitorCycle(), 300000); 
+    setInterval(() => this.monitorCycle(), 1800000); 
   },
 
   async syncProcessedIds() {
