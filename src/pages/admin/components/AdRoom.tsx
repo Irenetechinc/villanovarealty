@@ -104,8 +104,10 @@ const AdRoom = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${API_URL}/api/wallet/${user.id}`);
+      const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const url = API_URL ? `${API_URL}/api/wallet/${user.id}` : `/api/wallet/${user.id}`;
+      
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         setBalance(Number(data.balance));
@@ -124,7 +126,8 @@ const AdRoom = () => {
     setBotStatus('analyzing');
     
     // Define API_URL once for the scope
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
     let settingsRes;
 
     try {
@@ -148,7 +151,7 @@ const AdRoom = () => {
 
       // 2. Fetch Settings (to check if configured)
       try {
-          settingsRes = await fetch(`${API_URL}/api/adroom/settings/${user?.id}`);
+          settingsRes = await fetch(`${API_PREFIX}/adroom/settings/${user?.id}`);
       } catch (error) {
           console.error('Failed to connect to server:', error);
           setMessages(prev => {
@@ -210,7 +213,7 @@ const AdRoom = () => {
       }]);
 
       // 3. Trigger Analysis
-      const response = await fetch(`${API_URL}/api/adroom/analyze`, {
+      const response = await fetch(`${API_PREFIX}/adroom/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admin_id: user?.id })
@@ -241,7 +244,7 @@ const AdRoom = () => {
         });
 
         // Fetch and show recent adjustments if any
-        const reportsRes = await fetch(`${API_URL}/api/adroom/reports/${user?.id}`);
+        const reportsRes = await fetch(`${API_PREFIX}/adroom/reports/${user?.id}`);
         if (reportsRes.ok) {
             const reports = await reportsRes.json();
             const adjustments = reports.filter((r: any) => r.type === 'adjustment').slice(0, 3);
@@ -327,9 +330,10 @@ const AdRoom = () => {
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
       
-      const response = await fetch(`${API_URL}/api/adroom/test-sequence`, {
+      const response = await fetch(`${API_PREFIX}/adroom/test-sequence`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ admin_id: user?.id })
@@ -407,9 +411,10 @@ const AdRoom = () => {
     setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
 
-      const response = await fetch(`${API_URL}/api/adroom/approve`, {
+      const response = await fetch(`${API_PREFIX}/adroom/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -484,7 +489,8 @@ const AdRoom = () => {
     e.preventDefault();
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+      const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
       
       // Only send access token if it's being updated (i.e. not the placeholder)
       const payload: any = {
@@ -496,7 +502,7 @@ const AdRoom = () => {
           payload.facebook_access_token = fbSettings.access_token;
       }
       
-      await fetch(`${API_URL}/api/adroom/settings`, {
+      await fetch(`${API_PREFIX}/adroom/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -527,7 +533,7 @@ const AdRoom = () => {
           }]);
 
           // Trigger the analysis in background
-          fetch(`${API_URL}/api/adroom/analyze`, {
+          fetch(`${API_PREFIX}/adroom/analyze`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ admin_id: user?.id })

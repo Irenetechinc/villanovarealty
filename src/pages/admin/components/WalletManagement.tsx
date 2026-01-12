@@ -25,7 +25,8 @@ const WalletManagement = () => {
 
   const fetchWalletData = async (forceRefresh = false) => {
     setIsLoading(true);
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+    const API_PREFIX = BASE_URL ? `${BASE_URL}/api` : '/api';
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -38,7 +39,7 @@ const WalletManagement = () => {
       }
 
       // Add timestamp to URL to prevent caching
-      const url = `${API_URL}/api/wallet/${user.id}${forceRefresh ? `?t=${Date.now()}` : ''}`;
+      const url = `${API_PREFIX}/wallet/${user.id}${forceRefresh ? `?t=${Date.now()}` : ''}`;
       
       const balanceRes = await fetch(url, { headers });
       if (balanceRes.ok) {
@@ -47,7 +48,7 @@ const WalletManagement = () => {
       }
 
       // Fetch transactions from API instead of Supabase client to bypass RLS
-      const txRes = await fetch(`${API_URL}/api/wallet/${user.id}/transactions`, { headers });
+      const txRes = await fetch(`${API_PREFIX}/wallet/${user.id}/transactions`, { headers });
       if (txRes.ok) {
         const txData = await txRes.json();
         setTransactions(txData || []);
