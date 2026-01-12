@@ -42,8 +42,7 @@ export const botService = {
         if (body.object === 'page') {
             for (const entry of body.entry) {
                 const pageId = entry.id;
-                const webhookEvent = entry.messaging ? entry.messaging[0] : (entry.changes ? entry.changes[0] : null);
-
+                
                 // 1. Handle Messages
                 if (entry.messaging) {
                     const messageEvent = entry.messaging[0];
