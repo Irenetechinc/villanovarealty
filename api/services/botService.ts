@@ -160,18 +160,18 @@ export const botService = {
       } catch (e) {}
   },
 
-  async checkComments(pageId: string, accessToken: string, adminId: string) {
+  async checkComments(pageId: string, accessToken: string, _adminId: string) {
       // Existing implementation...
       // (Kept as backup for missed webhooks)
       try {
-        const response = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/notifications`, {
+        await axios.get(`https://graph.facebook.com/v18.0/${pageId}/notifications`, {
             params: { access_token: accessToken, type: 'feed_comment', limit: 5, fields: 'id,object' }
         });
         // ... (rest of logic same as before, just reduced limit)
       } catch (e) {}
   },
 
-  async checkMessages(pageId: string, accessToken: string, adminId: string) {
+  async checkMessages(_pageId: string, _accessToken: string, _adminId: string) {
       // Existing implementation...
   },
 
