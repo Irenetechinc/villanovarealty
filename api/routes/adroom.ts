@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import NodeCache from 'node-cache';
-import { geminiService } from '../services/gemini.ts';
-import { facebookService } from '../services/facebook.ts';
-import { supabaseAdmin } from '../supabase.ts';
+import { geminiService } from '../services/gemini.js';
+import { facebookService } from '../services/facebook.js';
+import { botService } from '../services/botService.js';
+import { supabaseAdmin } from '../supabase.js';
 
 const router = Router();
 const cache = new NodeCache({ stdTTL: 3600 }); // Cache for 1 hour
@@ -17,7 +18,45 @@ const adRoomLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Apply rate limiting to all adroom routes
+// WEBHOOK VERIFICATION (GET)
+// Used by Facebook to verify the callback URL
+router.get('/webhook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // Verify Token should be a secure random string you set in Facebook App Dashboard
+    const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || 'adroom_secure_verify_token';
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('WEBHOOK_VERIFIED');
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
+        }
+    } else {
+        res.sendStatus(400);
+    }
+});
+
+// WEBHOOK EVENT HANDLER (POST)
+// Receives updates from Facebook (feed, messages)
+router.post('/webhook', async (req, res) => {
+    const body = req.body;
+
+    if (body.object === 'page') {
+        // Return 200 OK immediately to acknowledge receipt to Facebook
+        res.status(200).send('EVENT_RECEIVED');
+
+        // Process asynchronously
+        await botService.handleWebhookEvent(body);
+    } else {
+        res.sendStatus(404);
+    }
+});
+
+// Apply rate limiting to all OTHER adroom routes (Admin API)
 router.use(adRoomLimiter);
 
 // 1. Get/Update Facebook Settings
