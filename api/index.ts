@@ -23,6 +23,8 @@ const PORT = process.env.PORT || 3000;
 automation.start();
 botService.start();
 
+app.set('trust proxy', 1); // Trust the first proxy
+
 app.use(cors());
 app.use(express.json());
 

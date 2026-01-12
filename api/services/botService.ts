@@ -84,6 +84,10 @@ export const botService = {
 
     console.log(`[Bot] Webhook: New Message from ${senderId}: "${messageText}"`);
 
+    // Only use Gemini if necessary (e.g. for generating content, decision making)
+    // For simple responses, we can use templates or check if AI is needed.
+    // Assuming we always want AI for now, but keeping it efficient.
+    
     // AI Reply
     const aiReply = await geminiService.generateContent(`
         You are a helpful real estate assistant.

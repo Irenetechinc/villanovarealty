@@ -885,15 +885,23 @@ const AdRoom = () => {
                                 {activeStrategy ? `Goal: ${activeStrategy.content.goal}` : 'Select a strategy in chat'}
                             </p>
                             {activeStrategy && (
-                                <button 
-                                    onClick={() => {
-                                        setSelectedStrategy(activeStrategy.content);
-                                        setShowStrategyModal(true);
-                                    }}
-                                    className="mt-2 text-xs text-blue-600 hover:underline"
-                                >
-                                    View Queue
-                                </button>
+                                <div className="mt-2 flex space-x-2">
+                                    <button 
+                                        onClick={() => {
+                                            setSelectedStrategy(activeStrategy.content);
+                                            setShowStrategyModal(true);
+                                        }}
+                                        className="text-xs text-blue-600 hover:underline"
+                                    >
+                                        View Queue
+                                    </button>
+                                    <button 
+                                        onClick={handleCancelCampaign}
+                                        className="text-xs text-red-600 hover:underline"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             )}
                         </div>
 
