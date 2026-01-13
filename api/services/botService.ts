@@ -66,11 +66,19 @@ export const botService = {
 
                 // 2. Handle Feed/Comments
                 if (entry.changes) {
+                    console.log(`[Bot] Processing ${entry.changes.length} changes...`);
                     for (const change of entry.changes) {
-                        // Check for 'feed' (Page Feed) or 'live_videos' etc. 
-                        // For comments, it's usually field: 'feed', value: { item: 'comment', verb: 'add' }
-                        if (change.field === 'feed' && change.value.item === 'comment' && change.value.verb === 'add') {
-                            await this.processIncomingComment(pageId, change.value);
+                        try {
+                            const value = change.value;
+                            // Relaxed check: Accept comments from any field (feed, status, photos, etc.)
+                            if (value && value.item === 'comment' && value.verb === 'add') {
+                                await this.processIncomingComment(pageId, value);
+                            } else {
+                                // Optional: Log ignored types for debugging if needed
+                                console.log(`[Bot] Ignored Change: Field=${change.field}, Item=${value?.item}`);
+                            }
+                        } catch (changeError) {
+                            console.error('[Bot] Error processing change entry:', changeError);
                         }
                     }
                 }
