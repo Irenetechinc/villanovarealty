@@ -303,6 +303,62 @@ export const facebookService = {
   async getInsights(pageId: string, accessToken: string) {
     try {
       // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
+      // Note: 'page_post_engagements' might be deprecated or restricted.
+      // We'll try the safe 'page_impressions' first if both fail.
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
+        params: {
+          access_token: accessToken,
+          metric: 'page_impressions,page_post_engagements',
+          period: 'day'
+        }
+      }));
+
+      const data = response.data.data;
+      let reach = 0;
+      let engagement = 0;
+
+      if (data) {
+        const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
+        const engagementMetric = data.find((m: any) => m.name === 'page_post_engagements');
+        
+        // Get most recent value
+        reach = impressionsMetric?.values[0]?.value || 0;
+        engagement = engagementMetric?.values[0]?.value || 0;
+      }
+
+      return { reach, engagement };
+    } catch (error: any) {
+      // Handle (#100) invalid metric error by falling back to simpler metric
+      if (error.response?.data?.error?.code === 100) {
+          console.warn('[Facebook API] Insights metric error, trying fallback (page_impressions only)...');
+          try {
+             const fallbackRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
+                params: {
+                  access_token: accessToken,
+                  metric: 'page_impressions',
+                  period: 'day'
+                }
+             }));
+             const imp = fallbackRes.data.data?.[0]?.values?.[0]?.value || 0;
+             return { reach: imp, engagement: 0 };
+          } catch (e) {
+             console.error('[Facebook API] Fallback Insights Failed:', e);
+             return { reach: 0, engagement: 0 };
+          }
+      }
+      
+      console.error('[Facebook API] Insights Error:', error.response?.data || error.message);
+      return { reach: 0, engagement: 0 };
+    }
+  }
+};
+
+  /**
+   * Get Page Insights (Reach, Engagement)
+   */
+  async getInsights(pageId: string, accessToken: string) {
+    try {
+      // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
       const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,

@@ -45,9 +45,9 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', message: 'Villanova Realty API is running' });
-});
+// app.get('/api/health', (_req, res) => {
+//   res.json({ status: 'ok', message: 'Villanova Realty API is running' });
+// });
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

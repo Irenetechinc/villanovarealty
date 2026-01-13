@@ -105,6 +105,26 @@ cron.schedule('* * * * *', async () => {
 cron.schedule('0 0 * * *', async () => {
     logActivity('Running Daily Strategy Performance Monitor...', 'info');
     await adRoomService.monitorAndAdjust();
+    
+    // Continuous Strategy Evaluation:
+    // Check if we need to queue more content for tomorrow
+    const { data: strategies } = await supabaseAdmin.from('adroom_strategies').select('*').eq('status', 'active');
+    
+    if (strategies) {
+        for (const strategy of strategies) {
+             const { count } = await supabaseAdmin
+                 .from('adroom_posts')
+                 .select('*', { count: 'exact', head: true })
+                 .eq('strategy_id', strategy.id)
+                 .eq('status', 'pending');
+             
+             if (count !== null && count < 5) {
+                 logActivity(`Strategy ${strategy.id} is running low on content (${count} pending). Triggering regeneration...`, 'warn');
+                 // Trigger generation logic here or flag for admin
+                 await adRoomService.generateMoreContent(strategy.id); 
+             }
+        }
+    }
 });
 
 // Run daily report generation (Midnight)

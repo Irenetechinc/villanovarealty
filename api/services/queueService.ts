@@ -22,9 +22,26 @@ class InteractionQueueService {
      * @param priority High priority for messages, lower for comments
      */
     add<T>(task: () => Promise<T>, priority: number = 0): Promise<T> {
+        if (this.queue.isPaused) {
+            console.warn('[Queue] Queue is paused due to rate limits. Task queued.');
+        }
         const p = this.queue.add(task, { priority });
         console.log(`[Queue] Task added. Pending: ${this.queue.pending}, Size: ${this.queue.size}`);
         return p as Promise<T>;
+    }
+
+    pause() {
+        if (!this.queue.isPaused) {
+            console.warn('[Queue] Pausing queue due to high API usage...');
+            this.queue.pause();
+        }
+    }
+
+    resume() {
+        if (this.queue.isPaused) {
+            console.info('[Queue] Resuming queue...');
+            this.queue.start();
+        }
     }
 
     get stats() {

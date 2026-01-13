@@ -146,4 +146,102 @@ export const adRoomService = {
       logActivity(`Adjustment Failed: ${error.message}`, 'error');
     }
   }
+  /**
+   * Generates additional content for an active strategy.
+   * This is triggered when the queue is running low (e.g. < 5 posts).
+   */
+  async generateMoreContent(strategyId: string) {
+    try {
+        logActivity(`[AdRoom] Generating more content for Strategy ${strategyId}...`, 'info');
+
+        // 1. Fetch Strategy Details
+        const { data: strategy } = await supabaseAdmin
+            .from('adroom_strategies')
+            .select('*')
+            .eq('id', strategyId)
+            .single();
+
+        if (!strategy) throw new Error('Strategy not found');
+
+        // 2. Fetch Assets (Properties) to use for content
+        // We need random properties to keep content fresh
+        const { data: properties } = await supabaseAdmin
+            .from('properties')
+            .select('*, property_images(url)')
+            .limit(10); // Fetch a batch
+
+        const assets = properties?.map(p => ({
+            ...p,
+            main_image: p.property_images?.[0]?.url || null
+        })).filter(p => p.main_image) || [];
+
+        // 3. Use Gemini to generate 5 new posts
+        const prompt = `
+            You are the Marketing Director.
+            Current Strategy Theme: "${strategy.content.theme}"
+            Goal: "${strategy.content.goal}"
+            
+            We are running low on scheduled content.
+            Create 5 NEW, engaging Facebook posts aligned with this strategy.
+            
+            Available Assets (Properties):
+            ${JSON.stringify(assets.slice(0, 3), null, 2)}
+            
+            Instructions:
+            - Create 5 distinct posts.
+            - Use the provided property images where relevant.
+            - Vary the content types (Question, Showcase, Tip, Urgency).
+            - Output JSON ONLY:
+            {
+                "new_posts": [
+                    { "content": "Post caption...", "image_url": "URL from assets" }
+                ]
+            }
+        `;
+
+        const result = await geminiService.generateContent(prompt);
+        const text = result.response.text();
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        
+        if (!jsonMatch) throw new Error('Failed to parse AI generation');
+        
+        const data = JSON.parse(jsonMatch[0]);
+        const newPosts = data.new_posts || [];
+
+        if (newPosts.length === 0) {
+            logActivity(`[AdRoom] AI failed to generate valid posts for Strategy ${strategyId}.`, 'warn');
+            return;
+        }
+
+        // 4. Insert into DB
+        // Find the latest scheduled time to append after
+        const { data: lastPost } = await supabaseAdmin
+            .from('adroom_posts')
+            .select('scheduled_time')
+            .eq('strategy_id', strategyId)
+            .order('scheduled_time', { ascending: false })
+            .limit(1)
+            .single();
+
+        let nextSchedule = lastPost ? new Date(lastPost.scheduled_time) : new Date();
+
+        const postsToInsert = newPosts.map((p: any, i: number) => {
+            // Add 1 day interval for each new post
+            nextSchedule.setDate(nextSchedule.getDate() + 1);
+            return {
+                strategy_id: strategyId,
+                content: p.content,
+                image_url: p.image_url || "https://placehold.co/600x400?text=AdRoom+Content", // Fallback
+                scheduled_time: nextSchedule.toISOString(),
+                status: 'pending'
+            };
+        });
+
+        await supabaseAdmin.from('adroom_posts').insert(postsToInsert);
+        logActivity(`[AdRoom] Successfully added ${postsToInsert.length} new posts to Strategy ${strategyId}.`, 'success');
+
+    } catch (error: any) {
+        logActivity(`[AdRoom] Content Generation Error: ${error.message}`, 'error');
+    }
+  }
 };
