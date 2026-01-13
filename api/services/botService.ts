@@ -49,7 +49,8 @@ export const botService = {
   async handleWebhookEvent(body: any) {
     try {
         console.log('[Bot] ⚡ Real-time Webhook Triggered!');
-        // console.log('[Bot] Webhook Received:', JSON.stringify(body, null, 2));
+        // EXTREMELY IMPORTANT: Log the raw body to debug field mismatches
+        console.log('[Bot] Webhook RAW:', JSON.stringify(body, null, 2));
 
         if (body.object === 'page') {
             for (const entry of body.entry) {
@@ -57,14 +58,17 @@ export const botService = {
                 
                 // 1. Handle Messages
                 if (entry.messaging) {
+                    console.log(`[Bot] Processing ${entry.messaging.length} messaging events...`);
                     for (const messageEvent of entry.messaging) {
                         if (messageEvent.message && !messageEvent.message.is_echo) {
                             await this.processIncomingMessage(pageId, messageEvent);
+                        } else {
+                            console.log('[Bot] Skipped messaging event (echo or no message):', messageEvent);
                         }
                     }
                 }
 
-                // 2. Handle Feed/Comments
+                // 2. Handle Feed/Comments/Changes
                 if (entry.changes) {
                     console.log(`[Bot] Processing ${entry.changes.length} changes...`);
                     for (const change of entry.changes) {
@@ -72,10 +76,11 @@ export const botService = {
                             const value = change.value;
                             // Relaxed check: Accept comments from any field (feed, status, photos, etc.)
                             if (value && value.item === 'comment' && value.verb === 'add') {
+                                console.log('[Bot] Detected new comment:', value.comment_id);
                                 await this.processIncomingComment(pageId, value);
                             } else {
-                                // Optional: Log ignored types for debugging if needed
-                                console.log(`[Bot] Ignored Change: Field=${change.field}, Item=${value?.item}`);
+                                // Log ignored types for debugging to identify missed events
+                                console.log(`[Bot] Ignored Change: Field=${change.field}, Item=${value?.item}, Verb=${value?.verb}`);
                             }
                         } catch (changeError) {
                             console.error('[Bot] Error processing change entry:', changeError);
@@ -94,7 +99,10 @@ export const botService = {
     const messageText = event.message.text;
     const messageId = event.message.mid;
 
-    if (this.processedIds.has(messageId)) return;
+    if (this.processedIds.has(messageId)) {
+        console.log(`[Bot] Skipping already processed message: ${messageId}`);
+        return;
+    }
 
     // Get Admin ID associated with this Page
     const { data: settings } = await supabaseAdmin
@@ -103,48 +111,53 @@ export const botService = {
         .eq('facebook_page_id', pageId)
         .single();
 
-    if (!settings) return;
+    if (!settings) {
+        console.error(`[Bot] No settings found for Page ID ${pageId}`);
+        return;
+    }
 
-    console.log(`[Bot] Webhook: New Message from ${senderId}: "${messageText}"`);
+    // Use User Profile for better logs
+    const userProfile = await facebookService.getUserProfile(senderId, settings.facebook_access_token);
+    const username = userProfile.name || 'Unknown User';
 
-    // Only use Gemini if necessary (e.g. for generating content, decision making)
-    // For simple responses, we can use templates or check if AI is needed.
-    // Assuming we always want AI for now, but keeping it efficient.
-    
-    // AI Reply
-    
-    // 1. Fetch Context (Last 5 messages)
-    const history = await facebookService.getConversationHistory(pageId, senderId, settings.facebook_access_token, 5);
-    
-    // Format history for Gemini
-    // History comes in reverse chronological order usually (newest first). Reverse it for context.
-    const contextString = history.reverse().map((msg: any) => {
-        const role = msg.from.id === pageId ? 'Assistant' : 'User';
-        return `${role}: ${msg.message}`;
-    }).join('\n');
+    console.log(`[Bot] Webhook: New Message from ${username} (${senderId}): "${messageText}"`);
 
-    const prompt = `
-        You are a helpful real estate assistant for Villanova Realty.
+    // AI Reply Logic
+    try {
+        // 1. Fetch Context (Last 5 messages)
+        const history = await facebookService.getConversationHistory(pageId, senderId, settings.facebook_access_token, 5);
         
-        Conversation History:
-        ${contextString}
-        
-        User's New Message: "${messageText}"
-        
-        Instructions:
-        - Reply professionally and helpfully.
-        - Keep it under 200 characters if possible.
-        - If the user asks about property listings, suggest checking the website or asking for specific details.
-    `;
+        // Format history for Gemini
+        const contextString = history.reverse().map((msg: any) => {
+            const role = msg.from.id === pageId ? 'Assistant' : 'User';
+            return `${role}: ${msg.message}`;
+        }).join('\n');
 
-    const aiReply = await geminiService.generateContent(prompt);
-    const replyText = aiReply.response.text().trim();
+        const prompt = `
+            You are a helpful real estate assistant for Villanova Realty.
+            
+            Conversation History:
+            ${contextString}
+            
+            User's New Message: "${messageText}"
+            
+            Instructions:
+            - Reply professionally and helpfully.
+            - Keep it under 200 characters if possible.
+            - If the user asks about property listings, suggest checking the website or asking for specific details.
+        `;
 
-    // Send Reply
-    await facebookService.sendMessage(senderId, replyText, settings.facebook_access_token);
-    
-    // Record
-    await this.recordInteraction(settings.admin_id, messageId, 'message', replyText);
+        const aiReply = await geminiService.generateContent(prompt);
+        const replyText = aiReply.response.text().trim();
+
+        // Send Reply
+        await facebookService.sendMessage(senderId, replyText, settings.facebook_access_token);
+        
+        // Record
+        await this.recordInteraction(settings.admin_id, messageId, 'message', replyText);
+    } catch (err) {
+        console.error('[Bot] Failed to process message:', err);
+    }
   },
 
   async processIncomingComment(pageId: string, value: any) {
@@ -154,7 +167,10 @@ export const botService = {
 
     // Ignore self
     if (senderId === pageId) return;
-    if (this.processedIds.has(commentId)) return;
+    if (this.processedIds.has(commentId)) {
+        console.log(`[Bot] Skipping comment ${commentId}: Already processed.`);
+        return;
+    }
 
     // Get Admin/Token
     const { data: settings } = await supabaseAdmin
@@ -163,32 +179,37 @@ export const botService = {
         .eq('facebook_page_id', pageId)
         .single();
 
-    if (!settings) return;
+    if (!settings) {
+        console.error(`[Bot] No settings found for Page ID ${pageId}`);
+        return;
+    }
 
     const username = value.from.name || 'Unknown User';
     // CONSOLE LOG FOR DASHBOARD
     console.log(`[Dashboard] 💬 COMMENT from ${username} (${senderId}): "${message}"`);
     console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
-    // AI Reply
-    const aiReply = await geminiService.generateContent(`
-        You are a friendly social media manager.
-        User Comment: "${message}"
-        Write a short, engaging reply (max 1 sentence). No hashtags.
-    `);
-    const replyText = aiReply.response.text().trim();
+    try {
+        // AI Reply
+        const aiReply = await geminiService.generateContent(`
+            You are a friendly social media manager.
+            User Comment: "${message}"
+            Write a short, engaging reply (max 1 sentence). No hashtags.
+        `);
+        const replyText = aiReply.response.text().trim();
 
-    // Reply
-    await facebookService.replyToComment(commentId, replyText, settings.facebook_access_token);
+        // Reply
+        await facebookService.replyToComment(commentId, replyText, settings.facebook_access_token);
 
-    // Record
-    await this.recordInteraction(settings.admin_id, commentId, 'comment', replyText);
+        // Record
+        await this.recordInteraction(settings.admin_id, commentId, 'comment', replyText);
+    } catch (err) {
+        console.error('[Bot] Failed to process comment:', err);
+    }
   },
 
   // Fallback Polling (Reduced Frequency)
   async monitorCycle() {
-    // ... Existing logic but less frequent ...
-    // Simplified for brevity as Webhook is primary now
     try {
         const { data: activeAdmins } = await supabaseAdmin.from('adroom_strategies').select('admin_id').eq('status', 'active');
         if (!activeAdmins) return;
@@ -223,7 +244,7 @@ export const botService = {
       try {
         // Method: Check Feed (Fallback for missed notifications)
         // Fetch last 5 posts and their comments (increased from 3 to catch more)
-        const feedRes = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
+        const feedRes = await axios.get(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
             params: { access_token: accessToken, limit: 5, fields: 'id,comments.limit(10){id,message,from,created_time}' }
         });
         
@@ -249,7 +270,7 @@ export const botService = {
           
           // Fetch if not provided
           if (!comment) {
-              const commentRes = await axios.get(`https://graph.facebook.com/v18.0/${commentId}`, {
+              const commentRes = await axios.get(`https://graph.facebook.com/v21.0/${commentId}`, {
                   params: { access_token: accessToken, fields: 'message,from,created_time' }
               });
               comment = { ...commentRes.data, id: commentId };
@@ -257,19 +278,11 @@ export const botService = {
 
           if (!comment.from || comment.from.id === pageId) return; // Ignore self
 
-          // Check if we already replied to this specific comment (Double check via API if needed, but ID cache should suffice)
-          // For robustness: Check if the comment has replies from US
-          // GET /{comment-id}/comments?fields=from
-          
           await this.processIncomingComment(pageId, {
               comment_id: comment.id,
               message: comment.message,
               from: comment.from
           });
-          
-          // Use adminId for logging or future extensions
-          // (This fixes the TS6133 unused variable error while keeping the signature ready)
-          // console.log(`[Bot] Processed comment for Admin ${adminId}`);
       } catch (e) {
           // Comment might be deleted
       }
@@ -288,7 +301,7 @@ export const botService = {
               if (this.processedIds.has(lastMessage.id)) continue;
 
               // Fetch details
-              const msgRes = await axios.get(`https://graph.facebook.com/v18.0/${lastMessage.id}`, {
+              const msgRes = await axios.get(`https://graph.facebook.com/v21.0/${lastMessage.id}`, {
                   params: { access_token: accessToken, fields: 'from,message,created_time' }
               });
               const msgData = msgRes.data;

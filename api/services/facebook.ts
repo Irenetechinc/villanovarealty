@@ -10,7 +10,7 @@ export const facebookService = {
     
     try {
       // 1. Try to fetch the page directly (validates token works for this ID)
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}`, {
         params: {
           access_token: accessToken,
           fields: 'name,id,access_token' // Request the Page Token directly if available
@@ -49,7 +49,7 @@ export const facebookService = {
           
           // 0. Check if the provided token is ALREADY the Page Token
           try {
-             const meRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/me`, {
+             const meRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/me`, {
                  params: { access_token: userToken, fields: 'id,name' }
              }));
              console.log(`[Facebook API] Token Identity Check: ID=${meRes.data.id}, Name=${meRes.data.name}`);
@@ -66,7 +66,7 @@ export const facebookService = {
           }
 
           // 1. GET /me/accounts?access_token={userToken}
-          const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/me/accounts`, {
+          const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/me/accounts`, {
               params: {
                   access_token: userToken,
                   limit: 100
@@ -102,8 +102,8 @@ export const facebookService = {
    */
   async publishPost(pageId: string, accessToken: string, content: string, imageUrl?: string) {
     try {
-      // POST https://graph.facebook.com/v18.0/{page-id}/feed
-      const url = `https://graph.facebook.com/v18.0/${pageId}/feed`;
+      // POST https://graph.facebook.com/v21.0/{page-id}/feed
+      const url = `https://graph.facebook.com/v21.0/${pageId}/feed`;
       
       const payload: any = {
         message: content,
@@ -137,7 +137,7 @@ export const facebookService = {
   async updatePost(postId: string, message: string, accessToken: string) {
     try {
       console.log(`[Facebook API] Updating post ${postId}...`);
-      await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v18.0/${postId}`, {
+      await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v21.0/${postId}`, {
         message,
         access_token: accessToken
       }));
@@ -153,7 +153,7 @@ export const facebookService = {
    */
   async getConversations(pageId: string, accessToken: string) {
     try {
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/conversations`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/conversations`, {
         params: { access_token: accessToken, fields: 'id,updated_time,snippet,messages.limit(1),participants' }
       }));
       return response.data.data || [];
@@ -170,7 +170,7 @@ export const facebookService = {
       try {
           // 1. Find conversation ID for this user
           // GET /{page-id}/conversations?user_id={user-id}
-          const convoRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/conversations`, {
+          const convoRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/conversations`, {
               params: { access_token: accessToken, user_id: userId }
           }));
           
@@ -179,7 +179,7 @@ export const facebookService = {
 
           // 2. Get messages
           // GET /{conversation-id}/messages?limit={limit}&fields=message,from,created_time
-          const msgRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${conversation.id}/messages`, {
+          const msgRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${conversation.id}/messages`, {
               params: { access_token: accessToken, limit, fields: 'message,from,created_time' }
           }));
 
@@ -195,7 +195,7 @@ export const facebookService = {
    */
   async getUserProfile(userId: string, accessToken: string) {
     try {
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${userId}`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${userId}`, {
         params: { access_token: accessToken, fields: 'name,first_name,last_name' }
       }));
       return response.data;
@@ -216,9 +216,10 @@ export const facebookService = {
       // For pages, we often send to a conversation or user ID.
       // POST /me/messages with recipient: {id: ...}
       console.log(`[Facebook API] Sending message to ${recipientId}...`);
-      const response = await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v18.0/me/messages`, {
+      const response = await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v21.0/me/messages`, {
         recipient: { id: recipientId },
         message: { text: cleanMessage },
+        messaging_type: "RESPONSE", // Required for immediate replies to avoid 24h window issues if tagged
         access_token: accessToken
       }), 1); // High priority (1)
       return response.data.message_id;
@@ -235,7 +236,7 @@ export const facebookService = {
     try {
       const cleanMessage = message.replace(/^\[Auto Reply\]\s*/i, '');
       console.log(`[Facebook API] Replying to comment ${commentId}...`);
-      const response = await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v18.0/${commentId}/comments`, {
+      const response = await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v21.0/${commentId}/comments`, {
         message: cleanMessage,
         access_token: accessToken
       }));
@@ -252,7 +253,7 @@ export const facebookService = {
   async deletePost(postId: string, accessToken: string) {
     try {
       console.log(`[Facebook API] Deleting post ${postId}...`);
-      await interactionQueue.add(() => axios.delete(`https://graph.facebook.com/v18.0/${postId}`, {
+      await interactionQueue.add(() => axios.delete(`https://graph.facebook.com/v21.0/${postId}`, {
         params: { access_token: accessToken }
       }));
       return true;
@@ -267,7 +268,7 @@ export const facebookService = {
    */
   async getComments(postId: string, accessToken: string) {
     try {
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${postId}/comments`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${postId}/comments`, {
         params: { access_token: accessToken, fields: 'id,message,from' }
       }));
       return response.data.data;
@@ -283,7 +284,7 @@ export const facebookService = {
   async getPostMetrics(postId: string, accessToken: string) {
     try {
       // GET /{post-id}?fields=insights.metric(post_impressions,post_engagements),shares,comments.summary(true),likes.summary(true)
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${postId}`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${postId}`, {
         params: {
           access_token: accessToken,
           fields: 'insights.metric(post_impressions,post_engagements),shares,comments.summary(true),likes.summary(true)'
@@ -320,7 +321,7 @@ export const facebookService = {
       // GET /{page-id}/insights?metric=page_impressions,page_engaged_users&period=day
       // 'page_post_engagements' is deprecated/unreliable in some versions.
       // 'page_engaged_users' is a good proxy for total engagement.
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,
           metric: 'page_impressions,page_engaged_users',
@@ -348,7 +349,7 @@ export const facebookService = {
       if (error.response?.data?.error?.code === 100) {
           console.warn('[Facebook API] Insights metric error, trying fallback (page_impressions only)...');
           try {
-             const fallbackRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
+             const fallbackRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
                 params: {
                   access_token: accessToken,
                   metric: 'page_impressions',
