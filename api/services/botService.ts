@@ -48,7 +48,8 @@ export const botService = {
    */
   async handleWebhookEvent(body: any) {
     try {
-        console.log('[Bot] Webhook Received:', JSON.stringify(body, null, 2));
+        console.log('[Bot] ⚡ Real-time Webhook Triggered!');
+        // console.log('[Bot] Webhook Received:', JSON.stringify(body, null, 2));
 
         if (body.object === 'page') {
             for (const entry of body.entry) {
@@ -156,7 +157,10 @@ export const botService = {
 
     if (!settings) return;
 
-    console.log(`[Bot] Webhook: New Comment from ${value.from.name}: "${message}"`);
+    const username = value.from.name || 'Unknown User';
+    // CONSOLE LOG FOR DASHBOARD
+    console.log(`[Dashboard] 💬 COMMENT from ${username} (${senderId}): "${message}"`);
+    console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
     // AI Reply
     const aiReply = await geminiService.generateContent(`

@@ -191,6 +191,21 @@ export const facebookService = {
   },
 
   /**
+   * Get User Profile (Name)
+   */
+  async getUserProfile(userId: string, accessToken: string) {
+    try {
+      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${userId}`, {
+        params: { access_token: accessToken, fields: 'name,first_name,last_name' }
+      }));
+      return response.data;
+    } catch (error: any) {
+      // console.error('[Facebook API] Get Profile Error:', error.response?.data || error.message);
+      return { name: 'Unknown User', first_name: 'User', last_name: '' };
+    }
+  },
+
+  /**
    * Reply to a conversation (send message)
    */
   async sendMessage(recipientId: string, message: string, accessToken: string) {
@@ -302,13 +317,13 @@ export const facebookService = {
    */
   async getInsights(pageId: string, accessToken: string) {
     try {
-      // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
-      // Note: 'page_post_engagements' might be deprecated or restricted.
-      // We'll try the safe 'page_impressions' first if both fail.
+      // GET /{page-id}/insights?metric=page_impressions,page_engaged_users&period=day
+      // 'page_post_engagements' is deprecated/unreliable in some versions.
+      // 'page_engaged_users' is a good proxy for total engagement.
       const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,
-          metric: 'page_impressions,page_post_engagements',
+          metric: 'page_impressions,page_engaged_users',
           period: 'day'
         }
       }));
@@ -319,11 +334,12 @@ export const facebookService = {
 
       if (data) {
         const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
-        const engagementMetric = data.find((m: any) => m.name === 'page_post_engagements');
+        const engagementMetric = data.find((m: any) => m.name === 'page_engaged_users');
         
-        // Get most recent value
-        reach = impressionsMetric?.values[0]?.value || 0;
-        engagement = engagementMetric?.values[0]?.value || 0;
+        // Get most recent value (usually index 0 or 1 depending on day)
+        // API returns data sorted by date usually. We take the latest available day.
+        reach = impressionsMetric?.values[1]?.value || impressionsMetric?.values[0]?.value || 0;
+        engagement = engagementMetric?.values[1]?.value || engagementMetric?.values[0]?.value || 0;
       }
 
       return { reach, engagement };
@@ -338,8 +354,8 @@ export const facebookService = {
                   metric: 'page_impressions',
                   period: 'day'
                 }
-             }));
-             const imp = fallbackRes.data.data?.[0]?.values?.[0]?.value || 0;
+              }));
+             const imp = fallbackRes.data.data?.[0]?.values?.[1]?.value || fallbackRes.data.data?.[0]?.values?.[0]?.value || 0;
              return { reach: imp, engagement: 0 };
           } catch (e) {
              console.error('[Facebook API] Fallback Insights Failed:', e);
@@ -348,43 +364,6 @@ export const facebookService = {
       }
       
       console.error('[Facebook API] Insights Error:', error.response?.data || error.message);
-      return { reach: 0, engagement: 0 };
-    }
-  }
-};
-
-  /**
-   * Get Page Insights (Reach, Engagement)
-   */
-  async getInsights(pageId: string, accessToken: string) {
-    try {
-      // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
-      const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v18.0/${pageId}/insights`, {
-        params: {
-          access_token: accessToken,
-          metric: 'page_impressions,page_post_engagements',
-          period: 'day'
-        }
-      }));
-
-      const data = response.data.data;
-      let reach = 0;
-      let engagement = 0;
-
-      // Parse insights data (structure depends on metric)
-      if (data) {
-        const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
-        const engagementMetric = data.find((m: any) => m.name === 'page_post_engagements');
-        
-        // Get most recent value
-        reach = impressionsMetric?.values[0]?.value || 0;
-        engagement = engagementMetric?.values[0]?.value || 0;
-      }
-
-      return { reach, engagement };
-    } catch (error: any) {
-      console.error('[Facebook API] Insights Error:', error.response?.data || error.message);
-      // Return 0s on error so we don't break the report UI
       return { reach: 0, engagement: 0 };
     }
   }

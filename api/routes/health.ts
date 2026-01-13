@@ -3,7 +3,7 @@ import { interactionQueue } from '../services/queueService.js';
 
 const router = express.Router();
 
-router.get('/health', (req, res) => {
+router.get('/health', (_req, res) => {
     const queueStats = interactionQueue.stats;
     res.json({
         status: 'online',

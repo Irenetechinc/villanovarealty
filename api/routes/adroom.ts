@@ -4,6 +4,7 @@ import NodeCache from 'node-cache';
 import { geminiService } from '../services/gemini.js';
 import { facebookService } from '../services/facebook.js';
 import { botService } from '../services/botService.js';
+import { adRoomService } from '../services/adRoomService.js';
 import { supabaseAdmin } from '../supabase.js';
 
 const router = Router();
@@ -221,6 +222,12 @@ router.post('/approve', async (req, res) => {
 
     // Clear cache
     cache.del(`adroom_strategies_${admin_id}`);
+
+    // REAL-TIME VALIDATION & AUTO-CORRECTION
+    // Don't await this, let it run in background so UI response is fast
+    // The Frontend (Supabase Realtime) will pick up the new posts as they are added
+    adRoomService.validateAndFixStrategy(strategy.id)
+        .catch((err: any) => console.error('Background validation failed:', err));
 
     res.json(strategy);
   } catch (error: any) {

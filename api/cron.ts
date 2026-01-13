@@ -119,7 +119,7 @@ cron.schedule('0 0 * * *', async () => {
                  .eq('status', 'pending');
              
              if (count !== null && count < 5) {
-                 logActivity(`Strategy ${strategy.id} is running low on content (${count} pending). Triggering regeneration...`, 'warn');
+                 logActivity(`Strategy ${strategy.id} is running low on content (${count} pending). Triggering regeneration...`, 'info');
                  // Trigger generation logic here or flag for admin
                  await adRoomService.generateMoreContent(strategy.id); 
              }
