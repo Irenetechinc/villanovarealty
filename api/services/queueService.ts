@@ -6,7 +6,6 @@ import PQueue from 'p-queue';
  */
 class InteractionQueueService {
     private queue: PQueue;
-    private processing: boolean = false;
 
     constructor() {
         // Concurrency 1 ensures we handle one interaction at a time per queue,
@@ -22,9 +21,10 @@ class InteractionQueueService {
      * @param task Function that returns a promise (the interaction processing logic)
      * @param priority High priority for messages, lower for comments
      */
-    add(task: () => Promise<void>, priority: number = 0) {
-        this.queue.add(task, { priority });
+    add<T>(task: () => Promise<T>, priority: number = 0): Promise<T> {
+        const p = this.queue.add(task, { priority });
         console.log(`[Queue] Task added. Pending: ${this.queue.pending}, Size: ${this.queue.size}`);
+        return p as Promise<T>;
     }
 
     get stats() {

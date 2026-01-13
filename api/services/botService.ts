@@ -103,11 +103,32 @@ export const botService = {
     // Assuming we always want AI for now, but keeping it efficient.
     
     // AI Reply
-    const aiReply = await geminiService.generateContent(`
-        You are a helpful real estate assistant.
-        User Message: "${messageText}"
-        Keep it professional, helpful, and under 200 characters.
-    `);
+    
+    // 1. Fetch Context (Last 5 messages)
+    const history = await facebookService.getConversationHistory(pageId, senderId, settings.facebook_access_token, 5);
+    
+    // Format history for Gemini
+    // History comes in reverse chronological order usually (newest first). Reverse it for context.
+    const contextString = history.reverse().map((msg: any) => {
+        const role = msg.from.id === pageId ? 'Assistant' : 'User';
+        return `${role}: ${msg.message}`;
+    }).join('\n');
+
+    const prompt = `
+        You are a helpful real estate assistant for Villanova Realty.
+        
+        Conversation History:
+        ${contextString}
+        
+        User's New Message: "${messageText}"
+        
+        Instructions:
+        - Reply professionally and helpfully.
+        - Keep it under 200 characters if possible.
+        - If the user asks about property listings, suggest checking the website or asking for specific details.
+    `;
+
+    const aiReply = await geminiService.generateContent(prompt);
     const replyText = aiReply.response.text().trim();
 
     // Send Reply
