@@ -21,9 +21,18 @@ export const botService = {
     // Initial sync of processed IDs from DB to avoid re-replying on restart
     this.syncProcessedIds();
 
+    // STARTUP SCAN: Immediately check for missed interactions while offline
+    this.initialScan();
+
     // REDUCED POLLING: Fallback only (every 30 minutes instead of 10s)
     // Primary trigger should be Webhooks to save API quota
     setInterval(() => this.monitorCycle(), 1800000); 
+  },
+
+  async initialScan() {
+    console.log('[Bot] Performing startup scan for missed interactions...');
+    await this.monitorCycle();
+    console.log('[Bot] Startup scan completed.');
   },
 
   async syncProcessedIds() {
@@ -39,21 +48,26 @@ export const botService = {
    */
   async handleWebhookEvent(body: any) {
     try {
+        console.log('[Bot] Webhook Received:', JSON.stringify(body, null, 2));
+
         if (body.object === 'page') {
             for (const entry of body.entry) {
                 const pageId = entry.id;
                 
                 // 1. Handle Messages
                 if (entry.messaging) {
-                    const messageEvent = entry.messaging[0];
-                    if (messageEvent.message && !messageEvent.message.is_echo) {
-                        await this.processIncomingMessage(pageId, messageEvent);
+                    for (const messageEvent of entry.messaging) {
+                        if (messageEvent.message && !messageEvent.message.is_echo) {
+                            await this.processIncomingMessage(pageId, messageEvent);
+                        }
                     }
                 }
 
                 // 2. Handle Feed/Comments
                 if (entry.changes) {
                     for (const change of entry.changes) {
+                        // Check for 'feed' (Page Feed) or 'live_videos' etc. 
+                        // For comments, it's usually field: 'feed', value: { item: 'comment', verb: 'add' }
                         if (change.field === 'feed' && change.value.item === 'comment' && change.value.verb === 'add') {
                             await this.processIncomingComment(pageId, change.value);
                         }
@@ -153,29 +167,132 @@ export const botService = {
   },
 
   async processAdmin(adminId: string) {
-      // Existing implementation...
-      // Only keep checking for things missed by webhook
       try {
         const { data: settings } = await supabaseAdmin.from('adroom_settings').select('*').eq('admin_id', adminId).single();
-        if (!settings?.facebook_page_id || !settings?.facebook_access_token) return;
-        // Light check
-        await this.checkComments(settings.facebook_page_id, settings.facebook_access_token, adminId);
-      } catch (e) {}
+        
+        if (!settings?.facebook_page_id || !settings?.facebook_access_token) {
+            console.warn(`[Bot] Admin ${adminId} missing Facebook settings. Skipping.`);
+            return;
+        }
+        
+        // Parallel checks with explicit logging
+        console.log(`[Bot] Scanning Admin ${adminId} (Page: ${settings.facebook_page_id})...`);
+        await Promise.all([
+            this.checkComments(settings.facebook_page_id, settings.facebook_access_token, adminId),
+            this.checkMessages(settings.facebook_page_id, settings.facebook_access_token, adminId)
+        ]);
+      } catch (e) {
+          console.error(`[Bot] Error processing admin ${adminId}:`, e);
+      }
   },
 
-  async checkComments(pageId: string, accessToken: string, _adminId: string) {
-      // Existing implementation...
-      // (Kept as backup for missed webhooks)
+  async checkComments(pageId: string, accessToken: string, adminId: string) {
       try {
-        await axios.get(`https://graph.facebook.com/v18.0/${pageId}/notifications`, {
-            params: { access_token: accessToken, type: 'feed_comment', limit: 5, fields: 'id,object' }
+        // Method 1: Check Notifications (Good for "new" stuff)
+        const notifRes = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/notifications`, {
+            params: { access_token: accessToken, type: 'feed_comment', limit: 10, fields: 'id,object,from,title,created_time' }
         });
-        // ... (rest of logic same as before, just reduced limit)
-      } catch (e) {}
+        
+        const notifications = notifRes.data.data || [];
+        if (notifications.length > 0) {
+            console.log(`[Bot] Found ${notifications.length} recent notifications.`);
+        }
+
+        for (const notif of notifications) {
+            if (notif.object && notif.object.id) {
+                const commentId = notif.object.id;
+                await this.processSingleComment(commentId, pageId, accessToken, adminId);
+            }
+        }
+
+        // Method 2: Check Feed (Fallback for missed notifications)
+        // Fetch last 3 posts and their comments
+        const feedRes = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
+            params: { access_token: accessToken, limit: 3, fields: 'id,comments.limit(5){id,message,from,created_time}' }
+        });
+        
+        const posts = feedRes.data.data || [];
+        for (const post of posts) {
+            if (post.comments && post.comments.data) {
+                for (const comment of post.comments.data) {
+                    await this.processSingleComment(comment.id, pageId, accessToken, adminId, comment);
+                }
+            }
+        }
+
+      } catch (e: any) {
+          console.error('[Bot] Check Comments Error:', e.response?.data || e.message);
+      }
   },
 
-  async checkMessages(_pageId: string, _accessToken: string, _adminId: string) {
-      // Existing implementation...
+  async processSingleComment(commentId: string, pageId: string, accessToken: string, _adminId: string, preFetchedData?: any) {
+      if (this.processedIds.has(commentId)) return;
+
+      try {
+          let comment = preFetchedData;
+          
+          // Fetch if not provided
+          if (!comment) {
+              const commentRes = await axios.get(`https://graph.facebook.com/v18.0/${commentId}`, {
+                  params: { access_token: accessToken, fields: 'message,from,created_time' }
+              });
+              comment = { ...commentRes.data, id: commentId };
+          }
+
+          if (!comment.from || comment.from.id === pageId) return; // Ignore self
+
+          // Check if we already replied to this specific comment (Double check via API if needed, but ID cache should suffice)
+          // For robustness: Check if the comment has replies from US
+          // GET /{comment-id}/comments?fields=from
+          
+          await this.processIncomingComment(pageId, {
+              comment_id: comment.id,
+              message: comment.message,
+              from: comment.from
+          });
+          
+          // Use adminId for logging or future extensions
+          // (This fixes the TS6133 unused variable error while keeping the signature ready)
+          // console.log(`[Bot] Processed comment for Admin ${adminId}`);
+      } catch (e) {
+          // Comment might be deleted
+      }
+  },
+
+  async checkMessages(pageId: string, accessToken: string, _adminId: string) {
+      try {
+          const conversations = await facebookService.getConversations(pageId, accessToken);
+          console.log(`[Bot] Checked inbox. Found ${conversations.length} conversations.`);
+          
+          for (const convo of conversations) {
+              // Check the latest message
+              const lastMessage = convo.messages?.data?.[0];
+              if (!lastMessage) continue;
+              
+              if (this.processedIds.has(lastMessage.id)) continue;
+
+              // Fetch details
+              const msgRes = await axios.get(`https://graph.facebook.com/v18.0/${lastMessage.id}`, {
+                  params: { access_token: accessToken, fields: 'from,message,created_time' }
+              });
+              const msgData = msgRes.data;
+
+              if (msgData.from?.id === pageId) {
+                  // If the LAST message is from us, we've likely handled it.
+                  // Add to processed so we don't check again
+                  this.processedIds.add(lastMessage.id);
+                  continue; 
+              }
+
+              // It's a new user message!
+              await this.processIncomingMessage(pageId, {
+                  sender: { id: msgData.from.id },
+                  message: { text: msgData.message, mid: msgData.id }
+              });
+          }
+      } catch (e: any) {
+          console.error('[Bot] Check Messages Error:', e.response?.data || e.message);
+      }
   },
 
   async recordInteraction(adminId: string, facebookId: string, type: 'comment' | 'message', content: string) {

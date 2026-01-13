@@ -30,10 +30,27 @@ cron.schedule('* * * * *', async () => {
       for (const post of duePosts) {
         try {
           // Fetch Facebook settings for this admin
+          // Robust check for joined data
+          const adminId = post.adroom_strategies?.admin_id;
+          
+          if (!adminId) {
+             // Fallback: Try to fetch strategy directly if join failed
+             const { data: strat } = await supabaseAdmin.from('adroom_strategies').select('admin_id').eq('id', post.strategy_id).single();
+             if (!strat) {
+                 logActivity(`Skipping post ${post.id}: Strategy not found.`, 'error');
+                 await supabaseAdmin.from('adroom_posts').update({ status: 'failed' }).eq('id', post.id);
+                 continue;
+             }
+             // Use the fetched adminId
+             // But we need to assign it to a variable, let's refactor slightly below
+          }
+          
+          const finalAdminId = adminId || (await supabaseAdmin.from('adroom_strategies').select('admin_id').eq('id', post.strategy_id).single()).data?.admin_id;
+
           const { data: settings } = await supabaseAdmin
             .from('adroom_settings')
             .select('*')
-            .eq('admin_id', post.adroom_strategies.admin_id)
+            .eq('admin_id', finalAdminId)
             .single();
 
           if (!settings || !settings.facebook_page_id || !settings.facebook_access_token) {
@@ -53,7 +70,7 @@ cron.schedule('* * * * *', async () => {
           );
 
           // 3. Update post status
-          await supabaseAdmin
+          const { error: updateError } = await supabaseAdmin
             .from('adroom_posts')
             .update({
               posted_time: new Date().toISOString(),
@@ -63,7 +80,11 @@ cron.schedule('* * * * *', async () => {
             })
             .eq('id', post.id);
 
-          logActivity(`Successfully published post ${post.id}. FB ID: ${platformPostId}`, 'success');
+          if (updateError) {
+             console.error('Failed to update DB status to posted:', updateError);
+          } else {
+             logActivity(`Successfully published post ${post.id}. FB ID: ${platformPostId}`, 'success');
+          }
         } catch (postError: any) {
           logActivity(`Failed to publish post ${post.id}: ${postError.message}`, 'error');
           await supabaseAdmin.from('adroom_posts').update({ status: 'failed' }).eq('id', post.id);
@@ -72,39 +93,8 @@ cron.schedule('* * * * *', async () => {
     }
 
     // 4. Check for New Messages/Comments and Auto-Reply (Autonomous Bot)
-    // We only check for admins who have an active strategy
-    const { data: activeAdmins } = await supabaseAdmin
-        .from('adroom_strategies')
-        .select('admin_id')
-        .eq('status', 'active');
-    
-    if (activeAdmins && activeAdmins.length > 0) {
-        // De-duplicate admins
-        const adminIds = [...new Set(activeAdmins.map(a => a.admin_id))];
-        
-        for (const adminId of adminIds) {
-             const { data: settings } = await supabaseAdmin
-                .from('adroom_settings')
-                .select('*')
-                .eq('admin_id', adminId)
-                .single();
-             
-             if (!settings || !settings.facebook_page_id || !settings.facebook_access_token) continue;
-             
-             // Check for new messages (Last 5 mins)
-             // Note: In production, we should store 'last_checked' timestamp in DB to avoid double-replying.
-             // For this demo, we'll check recent conversations and rely on a flag or just simplistic logic.
-             // A better way is to use Webhooks. Since we can't easily set up webhooks on localhost without ngrok, 
-             // we'll poll recent conversations.
-             
-             // NOTE: Real-world implementation requires tracking "replied_to" state.
-             // Here we simply log that we are "Monitoring" to simulate the bot's presence.
-             // To implement actual auto-reply safely without infinite loops, we need a 'conversations' table sync.
-             
-             // logActivity(`[Bot] Monitoring inbox for Page ${settings.facebook_page_id}...`, 'info');
-        }
-    }
-
+    // Handled by botService.ts (Webhook + Polling) to avoid race conditions.
+    // We do not duplicate the check here.
   } catch (err: any) {
     console.error('Critical error in automation cron:', err);
     logActivity(`Automation system error: ${err.message}`, 'error');

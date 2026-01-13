@@ -147,7 +147,11 @@ export const geminiService = {
         - Expected Outcome (Reach/Leads estimate)
         - Schedule (e.g., "Daily at 10 AM")
 
-        IMPORTANT: For "image_url" in the content plan, you MUST select the exact 'main_image' URL provided in the properties data. Do not invent URLs. If no image is available, leave it null.
+        IMPORTANT: For "image_url" in the content plan:
+        1. You MUST select a valid 'url' from the 'main_image' or 'property_images' provided in the properties data.
+        2. If a property has NO images, do NOT select it for a post. Only choose properties with images.
+        3. The 'image_url' field is COMPULSORY. Do not leave it null.
+        4. Do not invent URLs. Use the exact ones provided.
         
         Output valid JSON ONLY with this structure:
         {
