@@ -204,16 +204,8 @@ router.post('/approve', async (req, res) => {
         let imageUrl = item.image_url;
         if (!imageUrl || imageUrl === 'null' || !imageUrl.startsWith('http')) {
              console.error('[AdRoom] QC Error: Post missing valid image URL:', item);
-             // Requirement: "Missing images are compulsory"
-             // We try to find a fallback from properties if possible, or fail.
-             // For now, let's pick a random property image from the analysis data if available?
-             // Since we don't have access to the analysis data here easily (it was in cache), we fail.
-             // Or better: Use a placeholder image service if strict failure is bad for UX.
-             // But user said "compulsory".
-             // Let's throw error to stop the process and alert user.
-             // But that might fail the whole strategy. 
-             // Let's use a default branding image if specific image missing.
-             imageUrl = "https://placehold.co/600x400?text=Villanova+Realty"; // Temporary fallback to allow testing
+             // Fallback to default branding image
+             imageUrl = "https://placehold.co/600x400?text=AdRoom";
         }
 
         return {

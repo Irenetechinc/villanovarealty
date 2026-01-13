@@ -188,27 +188,10 @@ export const botService = {
 
   async checkComments(pageId: string, accessToken: string, adminId: string) {
       try {
-        // Method 1: Check Notifications (Good for "new" stuff)
-        const notifRes = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/notifications`, {
-            params: { access_token: accessToken, type: 'feed_comment', limit: 10, fields: 'id,object,from,title,created_time' }
-        });
-        
-        const notifications = notifRes.data.data || [];
-        if (notifications.length > 0) {
-            console.log(`[Bot] Found ${notifications.length} recent notifications.`);
-        }
-
-        for (const notif of notifications) {
-            if (notif.object && notif.object.id) {
-                const commentId = notif.object.id;
-                await this.processSingleComment(commentId, pageId, accessToken, adminId);
-            }
-        }
-
-        // Method 2: Check Feed (Fallback for missed notifications)
-        // Fetch last 3 posts and their comments
+        // Method: Check Feed (Fallback for missed notifications)
+        // Fetch last 5 posts and their comments (increased from 3 to catch more)
         const feedRes = await axios.get(`https://graph.facebook.com/v18.0/${pageId}/feed`, {
-            params: { access_token: accessToken, limit: 3, fields: 'id,comments.limit(5){id,message,from,created_time}' }
+            params: { access_token: accessToken, limit: 5, fields: 'id,comments.limit(10){id,message,from,created_time}' }
         });
         
         const posts = feedRes.data.data || [];

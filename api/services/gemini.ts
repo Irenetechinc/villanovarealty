@@ -51,6 +51,10 @@ export const geminiService = {
         4. Ad Recommendations (targeting, format)
         5. Budget Allocation Strategy
         
+        CRITICAL REQUIREMENT:
+        - The "content_plan" MUST contain at least 7 distinct posts (one for each day of the week) to be considered a viable strategy. 
+        - Do not propose fewer than 7 posts.
+        
         Format the response as a valid JSON object with the following structure:
         {
           "theme": "string",
