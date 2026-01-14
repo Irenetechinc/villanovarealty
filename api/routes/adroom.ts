@@ -5,6 +5,7 @@ import { geminiService } from '../services/gemini.js';
 import { facebookService } from '../services/facebook.js';
 import { botService } from '../services/botService.js';
 import { adRoomService } from '../services/adRoomService.js';
+import { strategyMonitorService } from '../services/strategyMonitorService.js';
 import { supabaseAdmin } from '../supabase.js';
 
 const router = Router();
@@ -469,6 +470,93 @@ router.get('/insights/:adminId', async (req, res) => {
     // Return zeros instead of 500 to keep dashboard alive
     res.json({ reach: 0, engagement: 0 });
   }
+});
+
+// 8. Monitoring: Health Status
+router.get('/monitoring/health/:adminId', async (req, res) => {
+    try {
+        const { data: strategies } = await supabaseAdmin
+            .from('adroom_strategies')
+            .select(`
+                id, type, status, created_at,
+                adroom_posts (id, status, posted_time, scheduled_time)
+            `)
+            .eq('admin_id', req.params.adminId)
+            .eq('status', 'active');
+
+        if (!strategies || strategies.length === 0) {
+             return res.json([]);
+        }
+        
+        const { data: alerts } = await supabaseAdmin
+            .from('adroom_strategy_alerts')
+            .select('*')
+            .eq('admin_id', req.params.adminId)
+            .eq('status', 'active');
+            
+        const healthData = strategies.map(s => {
+             const sAlerts = alerts?.filter(a => a.strategy_id === s.id) || [];
+             const status = sAlerts.some(a => a.severity === 'critical') ? 'critical' 
+                          : sAlerts.some(a => a.severity === 'warning') ? 'at_risk' 
+                          : 'healthy';
+             return {
+                 id: s.id,
+                 type: s.type,
+                 status,
+                 alerts: sAlerts.map(a => a.message),
+                 posts_count: s.adroom_posts.length,
+                 posted_count: s.adroom_posts.filter((p: any) => p.status === 'posted').length
+             };
+        });
+        
+        res.json(healthData);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 9. Monitoring: Logs
+router.get('/monitoring/logs/:adminId', async (req, res) => {
+    try {
+        const { data: logs } = await supabaseAdmin
+            .from('adroom_strategy_logs')
+            .select('*')
+            .eq('admin_id', req.params.adminId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+            
+        res.json(logs || []);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// 10. Monitoring: Manual Fix
+router.post('/monitoring/fix/:strategyId', async (req, res) => {
+    try {
+        const { strategyId } = req.params;
+        const { adminId: _adminId } = req.body; // Pass adminId for security checks if needed
+        
+        const { data: strategy } = await supabaseAdmin
+            .from('adroom_strategies')
+            .select('*, adroom_posts(*)')
+            .eq('id', strategyId)
+            .single();
+            
+        if (!strategy) throw new Error('Strategy not found');
+
+        // Manually trigger auto-fix
+        await strategyMonitorService.autoFixStrategy(strategy, {
+            status: 'critical',
+            lastPostDate: null, 
+            missedPosts: 1, 
+            issues: ['Manual Fix Triggered']
+        });
+        
+        res.json({ success: true, message: 'Fix initiated' });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 export default router;

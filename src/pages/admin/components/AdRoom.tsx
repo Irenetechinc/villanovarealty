@@ -54,7 +54,7 @@ interface Insights {
 
 const AdRoom = () => {
   // State
-  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard'>('dashboard');
+  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor'>('dashboard');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -68,6 +68,7 @@ const AdRoom = () => {
   const [recentActivity, setRecentActivity] = useState<InteractionLog[]>([]);
   const [insights, setInsights] = useState<Insights>({ reach: 0, engagement: 0 });
   const [analyzingInsights, setAnalyzingInsights] = useState(false);
+  const [strategyHealth, setStrategyHealth] = useState<any[]>([]);
 
   // UI State
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -162,6 +163,23 @@ const AdRoom = () => {
       }
   };
 
+  const fetchStrategyHealth = async () => {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+        const url = API_URL ? `${API_URL}/api/adroom/monitoring/health/${user.id}` : `/api/adroom/monitoring/health/${user.id}`;
+        
+        const res = await fetch(url);
+        if (res.ok) {
+            const data = await res.json();
+            setStrategyHealth(data);
+        }
+    } catch (e) {
+        console.error('Health fetch error:', e);
+    }
+  };
+
   const fetchDashboardData = async () => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -205,6 +223,9 @@ const AdRoom = () => {
 
         // 4. Fetch Insights
         fetchInsights();
+        
+        // 5. Fetch Health
+        fetchStrategyHealth();
 
     } catch (error) {
         console.error('Dashboard fetch error:', error);
@@ -474,6 +495,7 @@ const AdRoom = () => {
         <nav className="flex-1 space-y-2 px-2">
             {[
                 { id: 'dashboard', icon: Activity, label: 'Command Center' },
+                { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
                 { id: 'chat', icon: MessageSquare, label: 'Neural Chat' },
                 { id: 'wallet', icon: Wallet, label: 'Wallet' },
                 { id: 'settings', icon: Settings, label: 'Configuration' }
@@ -664,6 +686,79 @@ const AdRoom = () => {
                     </div>
                 </div>
             </motion.main>
+        )}
+
+        {/* VIEW: MONITOR */}
+        {view === 'monitor' && (
+             <motion.div 
+                key="monitor"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 overflow-y-auto p-4 lg:p-8 z-10 scrollbar-thin scrollbar-thumb-slate-700"
+             >
+                 <h1 className="text-3xl font-bold text-white mb-8">Strategy Health Monitor</h1>
+                 
+                 <div className="grid gap-6">
+                     {strategyHealth.length === 0 ? (
+                         <div className="text-slate-500 text-center py-10">No active strategies to monitor.</div>
+                     ) : (
+                         strategyHealth.map((strat: any) => (
+                             <div key={strat.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                                 <div className="flex justify-between items-start mb-4">
+                                     <div>
+                                         <h3 className="text-xl font-bold text-white capitalize">{strat.type} Strategy</h3>
+                                         <span className={`inline-block px-2 py-0.5 rounded text-xs mt-1 ${
+                                             strat.status === 'healthy' ? 'bg-green-500/20 text-green-400' :
+                                             strat.status === 'at_risk' ? 'bg-yellow-500/20 text-yellow-400' :
+                                             'bg-red-500/20 text-red-400'
+                                         }`}>
+                                             {strat.status.toUpperCase()}
+                                         </span>
+                                     </div>
+                                     <div className="text-right">
+                                         <p className="text-2xl font-bold text-white">{strat.posted_count} / {strat.posts_count}</p>
+                                         <p className="text-xs text-slate-500">Posts Completed</p>
+                                     </div>
+                                 </div>
+                                 
+                                 {strat.alerts.length > 0 && (
+                                     <div className="bg-red-500/10 border border-red-500/20 rounded p-3 mb-4">
+                                         <h4 className="text-red-400 font-bold text-sm mb-2 flex items-center"><AlertOctagon className="h-4 w-4 mr-2"/> Active Alerts</h4>
+                                         <ul className="list-disc list-inside text-xs text-red-300 space-y-1">
+                                             {strat.alerts.map((alert: string, i: number) => (
+                                                 <li key={i}>{alert}</li>
+                                             ))}
+                                         </ul>
+                                     </div>
+                                 )}
+                                 
+                                 <div className="flex space-x-3 mt-4">
+                                     {strat.status !== 'healthy' && (
+                                         <button 
+                                            onClick={async () => {
+                                                if(!confirm('Trigger manual auto-fix?')) return;
+                                                const { data: { user } } = await supabase.auth.getUser();
+                                                const BASE_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+                                                await fetch(`${BASE_URL ? BASE_URL : ''}/api/adroom/monitoring/fix/${strat.id}`, {
+                                                    method: 'POST',
+                                                    headers: {'Content-Type': 'application/json'},
+                                                    body: JSON.stringify({ adminId: user?.id })
+                                                });
+                                                alert('Fix triggered. Refreshing...');
+                                                fetchStrategyHealth();
+                                            }}
+                                            className="px-4 py-2 bg-cyan-600 text-white text-sm rounded hover:bg-cyan-500"
+                                         >
+                                             Auto-Fix Issues
+                                         </button>
+                                     )}
+                                 </div>
+                             </div>
+                         ))
+                     )}
+                 </div>
+             </motion.div>
         )}
 
         {/* VIEW: CHAT */}

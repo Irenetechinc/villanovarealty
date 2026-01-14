@@ -3,6 +3,7 @@ import { supabaseAdmin } from './supabase.js';
 import { facebookService } from './services/facebook.js';
 import { logActivity } from './logger.js';
 import { adRoomService } from './services/adRoomService.js';
+import { strategyMonitorService } from './services/strategyMonitorService.js';
 
 // Run every minute to check for due posts
 cron.schedule('* * * * *', async () => {
@@ -132,6 +133,12 @@ cron.schedule('0 0 * * *', async () => {
     console.log('Running Daily Report Generation...');
     // Logic to fetch all active strategies, aggregate metrics from 'adroom_posts', and save to 'adroom_reports'
     // Placeholder implementation
+});
+
+// Run Comprehensive Strategy Health Check every 10 minutes (High Frequency Monitoring)
+cron.schedule('*/10 * * * *', async () => {
+    // logActivity('Running Frequent Strategy Health Monitor...', 'info');
+    await strategyMonitorService.monitorAllStrategies();
 });
 
 export const automation = {
