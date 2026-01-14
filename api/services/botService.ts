@@ -340,6 +340,3 @@ export const botService = {
     logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
   }
 };
-    logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
-  }
-};
