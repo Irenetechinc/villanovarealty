@@ -163,24 +163,39 @@ export const botService = {
         // 1. Fetch Context (Last 5 messages)
         const history = await facebookService.getConversationHistory(pageId, senderId, settings.facebook_access_token, 5);
         
-        // Format history for Gemini
+        // Format history for Gemini/Bytez
         const contextString = history.reverse().map((msg: any) => {
-            const role = msg.from.id === pageId ? 'Assistant' : 'User';
+            const role = msg.from.id === pageId ? 'assistant' : 'user'; // Ensure standard roles
             return `${role}: ${msg.message}`;
         }).join('\n');
+
+        // 2. Fetch Knowledge Base (Available Properties)
+        const { data: properties } = await supabaseAdmin
+            .from('properties')
+            .select('title, price, location, type')
+            .eq('status', 'available')
+            .limit(5); // Provide top 5 properties for context
+
+        const propertyContext = properties?.length 
+            ? properties.map(p => `- ${p.title} (${p.type}): $${p.price} in ${p.location}`).join('\n')
+            : "No specific property data available currently. Direct them to the website.";
 
         const prompt = `
             You are a helpful real estate assistant for Villanova Realty.
             
-            Conversation History:
+            AVAILABLE PROPERTIES (Use this data to answer questions):
+            ${propertyContext}
+            
+            CONVERSATION HISTORY:
             ${contextString}
             
-            User's New Message: "${messageText}"
+            USER'S NEW MESSAGE: "${messageText}"
             
-            Instructions:
-            - Reply professionally and helpfully.
+            INSTRUCTIONS:
+            - Reply professionally and helpfully based ONLY on the provided property data or general real estate knowledge.
+            - If the user asks for something not listed, politely suggest they check our full website.
             - Keep it under 200 characters if possible.
-            - If the user asks about property listings, suggest checking the website or asking for specific details.
+            - Do not make up facts.
         `;
 
         const aiReply = await geminiService.generateContent(prompt);
@@ -207,8 +222,21 @@ export const botService = {
 
     // Ignore self
     if (senderId === pageId) return;
+
+    // Double-Check DB to prevent duplicates (Idempotency)
+    const { count } = await supabaseAdmin
+        .from('adroom_interactions')
+        .select('*', { count: 'exact', head: true })
+        .eq('facebook_id', commentId);
+
+    if (count && count > 0) {
+        console.log(`[Bot] Skipping comment ${commentId}: Found in DB.`);
+        this.processedIds.add(commentId); // Update cache
+        return;
+    }
+
     if (this.processedIds.has(commentId)) {
-        console.log(`[Bot] Skipping comment ${commentId}: Already processed.`);
+        console.log(`[Bot] Skipping comment ${commentId}: Already processed (Cache).`);
         return;
     }
 
@@ -232,7 +260,7 @@ export const botService = {
     try {
         // AI Reply
         const aiReply = await geminiService.generateContent(`
-            You are a friendly social media manager.
+            You are a friendly social media manager for Villanova Realty.
             User Comment: "${message}"
             Write a short, engaging reply (max 1 sentence). No hashtags.
         `);
