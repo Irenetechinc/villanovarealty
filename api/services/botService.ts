@@ -3,15 +3,34 @@ import { supabaseAdmin } from '../supabase.js';
 import { facebookService } from './facebook.js';
 import { geminiService } from './gemini.js';
 import { logActivity } from '../logger.js';
+import PQueue from 'p-queue';
+
+// Interfaces for Task Management
+interface BotTask {
+    id: string; // Unique ID (Facebook Message ID or Comment ID)
+    type: 'message' | 'comment';
+    payload: any;
+    pageId: string;
+    timestamp: number;
+    retryCount: 0;
+}
 
 /**
  * Autonomous Bot Service
  * Handles Webhook events for instant response and scheduled polling as fallback.
+ * Now features a Robust Task Queue to handle concurrency and prevent duplication.
  */
 export const botService = {
   // Store processed IDs in memory for cache speed
   processedIds: new Set<string>(),
   
+  // Task Queue for managing concurrent processing
+  // Concurrency: 1 ensures FIFO and no race conditions on single-threaded logic
+  taskQueue: new PQueue({ concurrency: 1 }),
+  
+  // Track tasks currently in queue to prevent duplicates during scan
+  queuedTaskIds: new Set<string>(),
+
   // Debug stats
   lastWebhookTime: 0,
   lastProcessedId: '',
@@ -49,6 +68,43 @@ export const botService = {
   },
 
   /**
+   * Add a task to the processing queue
+   */
+  addTask(task: BotTask) {
+      if (this.processedIds.has(task.id)) {
+          // Already processed
+          return;
+      }
+      if (this.queuedTaskIds.has(task.id)) {
+          // Already queued, don't add duplicate
+          // console.log(`[Bot] Task ${task.id} already queued. Skipping duplicate.`);
+          return;
+      }
+
+      // Add to queue tracker
+      this.queuedTaskIds.add(task.id);
+
+      // Push to PQueue
+      this.taskQueue.add(async () => {
+          try {
+              console.log(`[Bot] Processing Task: ${task.type} ID: ${task.id}`);
+              
+              if (task.type === 'message') {
+                  await this.processIncomingMessage(task.pageId, task.payload);
+              } else if (task.type === 'comment') {
+                  await this.processIncomingComment(task.pageId, task.payload);
+              }
+
+          } catch (error) {
+              console.error(`[Bot] Task Execution Failed for ${task.id}:`, error);
+          } finally {
+              // Cleanup after processing (success or fail)
+              this.queuedTaskIds.delete(task.id);
+          }
+      });
+  },
+
+  /**
    * Handle Incoming Webhook Event (Real-Time)
    */
   async handleWebhookEvent(body: any) {
@@ -57,60 +113,48 @@ export const botService = {
     
     try {
         console.log(`[Bot] ⚡ Real-time Webhook Triggered! (#${this.webhookCount})`);
-        // EXTREMELY IMPORTANT: Log the raw body to debug field mismatches
-        // Use JSON.stringify safely
-        try {
-            console.log('[Bot] Webhook RAW:', JSON.stringify(body, null, 2));
-        } catch (e) {
-            console.log('[Bot] Webhook RAW (Unstringifiable):', body);
-        }
-
+        
         if (body.object === 'page') {
-            if (!body.entry || !Array.isArray(body.entry)) {
-                console.warn('[Bot] Webhook has no valid "entry" array.');
-                return;
-            }
+            if (!body.entry || !Array.isArray(body.entry)) return;
 
             for (const entry of body.entry) {
-                const pageId = String(entry.id); // Ensure string
+                const pageId = String(entry.id);
                 
                 // 1. Handle Messages
                 if (entry.messaging) {
-                    console.log(`[Bot] Processing ${entry.messaging.length} messaging events for Page ${pageId}...`);
                     for (const messageEvent of entry.messaging) {
-                        // FIX: Ensure we handle messages that might not be 'is_echo' but are still bot-sent or system messages
-                        // We also need to be careful not to process our own messages if 'is_echo' is false (rare but possible with some setups)
                         if (messageEvent.message && !messageEvent.message.is_echo) {
-                            // Check for quick replies or attachments too, but for now text is priority
-                            await this.processIncomingMessage(pageId, messageEvent);
-                        } else {
-                            console.log('[Bot] Skipped messaging event (echo or no message):', JSON.stringify(messageEvent));
+                            // Enqueue Message Task
+                            this.addTask({
+                                id: String(messageEvent.message.mid),
+                                type: 'message',
+                                payload: messageEvent,
+                                pageId: pageId,
+                                timestamp: Date.now(),
+                                retryCount: 0
+                            });
                         }
                     }
                 }
 
-                // 2. Handle Feed/Comments/Changes
+                // 2. Handle Feed/Comments
                 if (entry.changes) {
-                    console.log(`[Bot] Processing ${entry.changes.length} changes for Page ${pageId}...`);
                     for (const change of entry.changes) {
-                        try {
-                            const value = change.value;
-                            // Relaxed check: Accept comments from any field (feed, status, photos, etc.)
-                            if (value && value.item === 'comment' && value.verb === 'add') {
-                                console.log('[Bot] Detected new comment:', value.comment_id);
-                                await this.processIncomingComment(pageId, value);
-                            } else {
-                                // Log ignored types for debugging to identify missed events
-                                console.log(`[Bot] Ignored Change: Field=${change.field}, Item=${value?.item}, Verb=${value?.verb}`);
-                            }
-                        } catch (changeError) {
-                            console.error('[Bot] Error processing change entry:', changeError);
+                        const value = change.value;
+                        if (value && value.item === 'comment' && value.verb === 'add') {
+                            // Enqueue Comment Task
+                            this.addTask({
+                                id: String(value.comment_id),
+                                type: 'comment',
+                                payload: value,
+                                pageId: pageId,
+                                timestamp: Date.now(),
+                                retryCount: 0
+                            });
                         }
                     }
                 }
             }
-        } else {
-            console.warn(`[Bot] Ignored webhook object type: ${body.object}`);
         }
     } catch (error) {
         console.error('[Bot] Webhook Handler Error:', error);
@@ -122,15 +166,12 @@ export const botService = {
     const messageText = event.message.text;
     const messageId = String(event.message.mid);
 
-    if (this.processedIds.has(messageId)) {
-        console.log(`[Bot] Skipping already processed message: ${messageId}`);
-        return;
-    }
+    // Double Check inside execution context (in case of race conditions)
+    if (this.processedIds.has(messageId)) return;
 
-    console.log(`[Bot] Processing message ${messageId} from ${senderId}...`);
+    console.log(`[Bot] Executing Message Logic ${messageId} from ${senderId}...`);
 
     // Get Admin ID associated with this Page
-    // Ensure pageId is treated as string for query
     const { data: settings } = await supabaseAdmin
         .from('adroom_settings')
         .select('admin_id, facebook_access_token')
@@ -142,21 +183,8 @@ export const botService = {
         return;
     }
 
-    // Use User Profile for better logs
-    let username = 'Unknown User';
-    try {
-        const userProfile = await facebookService.getUserProfile(senderId, settings.facebook_access_token);
-        username = userProfile.name || 'Unknown User';
-    } catch (e) {
-        console.warn(`[Bot] Failed to fetch user profile for ${senderId}`);
-    }
-
-    console.log(`[Bot] Webhook: New Message from ${username} (${senderId}): "${messageText}"`);
-
     // 0. Send Immediate "Typing..." Indicator
-    // Don't await this, just fire it.
-    facebookService.sendTypingIndicator(senderId, settings.facebook_access_token)
-        .catch(() => {}); // Ignore errors
+    facebookService.sendTypingIndicator(senderId, settings.facebook_access_token).catch(() => {});
 
     // AI Reply Logic
     try {
@@ -253,8 +281,6 @@ export const botService = {
     }
 
     const username = value.from.name || 'Unknown User';
-    // CONSOLE LOG FOR DASHBOARD
-    console.log(`[Dashboard] 💬 COMMENT from ${username} (${senderId}): "${message}"`);
     console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
     try {
@@ -294,12 +320,11 @@ export const botService = {
         const { data: settings } = await supabaseAdmin.from('adroom_settings').select('*').eq('admin_id', adminId).single();
         
         if (!settings?.facebook_page_id || !settings?.facebook_access_token) {
-            console.warn(`[Bot] Admin ${adminId} missing Facebook settings. Skipping.`);
             return;
         }
         
         // Parallel checks with explicit logging
-        console.log(`[Bot] Scanning Admin ${adminId} (Page: ${settings.facebook_page_id})...`);
+        // console.log(`[Bot] Scanning Admin ${adminId} (Page: ${settings.facebook_page_id})...`);
         await Promise.all([
             this.checkComments(settings.facebook_page_id, settings.facebook_access_token, adminId),
             this.checkMessages(settings.facebook_page_id, settings.facebook_access_token, adminId)
@@ -309,10 +334,8 @@ export const botService = {
       }
   },
 
-  async checkComments(pageId: string, accessToken: string, adminId: string) {
+  async checkComments(pageId: string, accessToken: string, _adminId: string) {
       try {
-        // Method: Check Feed (Fallback for missed notifications)
-        // Fetch last 5 posts and their comments (increased from 3 to catch more)
         const feedRes = await axios.get(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
             params: { access_token: accessToken, limit: 5, fields: 'id,comments.limit(10){id,message,from,created_time}' }
         });
@@ -321,75 +344,63 @@ export const botService = {
         for (const post of posts) {
             if (post.comments && post.comments.data) {
                 for (const comment of post.comments.data) {
-                    await this.processSingleComment(comment.id, pageId, accessToken, adminId, comment);
+                    // Check if already processed OR queued
+                    if (!this.processedIds.has(comment.id) && !this.queuedTaskIds.has(comment.id)) {
+                        // Enqueue found comment
+                        this.addTask({
+                            id: comment.id,
+                            type: 'comment',
+                            payload: { ...comment, comment_id: comment.id },
+                            pageId: pageId,
+                            timestamp: Date.now(),
+                            retryCount: 0
+                        });
+                    }
                 }
             }
         }
 
       } catch (e: any) {
-          console.error('[Bot] Check Comments Error:', e.response?.data || e.message);
-      }
-  },
-
-  async processSingleComment(commentId: string, pageId: string, accessToken: string, _adminId: string, preFetchedData?: any) {
-      if (this.processedIds.has(commentId)) return;
-
-      try {
-          let comment = preFetchedData;
-          
-          // Fetch if not provided
-          if (!comment) {
-              const commentRes = await axios.get(`https://graph.facebook.com/v21.0/${commentId}`, {
-                  params: { access_token: accessToken, fields: 'message,from,created_time' }
-              });
-              comment = { ...commentRes.data, id: commentId };
-          }
-
-          if (!comment.from || comment.from.id === pageId) return; // Ignore self
-
-          await this.processIncomingComment(pageId, {
-              comment_id: comment.id,
-              message: comment.message,
-              from: comment.from
-          });
-      } catch (e) {
-          // Comment might be deleted
+          // Silent fail for polling errors to avoid log spam
       }
   },
 
   async checkMessages(pageId: string, accessToken: string, _adminId: string) {
       try {
           const conversations = await facebookService.getConversations(pageId, accessToken);
-          console.log(`[Bot] Checked inbox. Found ${conversations.length} conversations.`);
           
           for (const convo of conversations) {
-              // Check the latest message
               const lastMessage = convo.messages?.data?.[0];
               if (!lastMessage) continue;
               
-              if (this.processedIds.has(lastMessage.id)) continue;
+              if (!this.processedIds.has(lastMessage.id) && !this.queuedTaskIds.has(lastMessage.id)) {
+                  // Need to fetch details to get message text
+                   const msgRes = await axios.get(`https://graph.facebook.com/v21.0/${lastMessage.id}`, {
+                      params: { access_token: accessToken, fields: 'from,message,created_time' }
+                  });
+                  const msgData = msgRes.data;
 
-              // Fetch details
-              const msgRes = await axios.get(`https://graph.facebook.com/v21.0/${lastMessage.id}`, {
-                  params: { access_token: accessToken, fields: 'from,message,created_time' }
-              });
-              const msgData = msgRes.data;
+                  if (msgData.from?.id === pageId) {
+                      this.processedIds.add(lastMessage.id);
+                      continue; 
+                  }
 
-              if (msgData.from?.id === pageId) {
-                  // If the LAST message is from us, we've likely handled it.
-                  // Add to processed so we don't check again
-                  this.processedIds.add(lastMessage.id);
-                  continue; 
+                  // Enqueue Message
+                  this.addTask({
+                      id: lastMessage.id,
+                      type: 'message',
+                      payload: {
+                          sender: { id: msgData.from.id },
+                          message: { text: msgData.message, mid: msgData.id }
+                      },
+                      pageId: pageId,
+                      timestamp: Date.now(),
+                      retryCount: 0
+                  });
               }
-
-              // It's a new user message!
-              await this.processIncomingMessage(pageId, {
-                  sender: { id: msgData.from.id },
-                  message: { text: msgData.message, mid: msgData.id }
-              });
           }
       } catch (e: any) {
-          console.error('[Bot] Check Messages Error:', e.response?.data || e.message);
+          // Silent fail
       }
   },
 
