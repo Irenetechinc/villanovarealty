@@ -123,7 +123,9 @@ export const botService = {
     console.log(`[Bot] Webhook: New Message from ${username} (${senderId}): "${messageText}"`);
 
     // 0. Send Immediate "Typing..." Indicator
-    await facebookService.sendTypingIndicator(senderId, settings.facebook_access_token);
+    // Don't await this, just fire it.
+    facebookService.sendTypingIndicator(senderId, settings.facebook_access_token)
+        .catch(() => {}); // Ignore errors
 
     // AI Reply Logic
     try {
@@ -335,6 +337,9 @@ export const botService = {
         type,
         content
     });
+    logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
+  }
+};
     logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
   }
 };
