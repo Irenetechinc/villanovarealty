@@ -1,5 +1,6 @@
 import Bytez from 'bytez.js';
 import dotenv from 'dotenv';
+import PQueue from 'p-queue';
 
 dotenv.config();
 
@@ -14,14 +15,23 @@ const sdk = new Bytez(API_KEY || '');
 // Use the specific model requested by the user
 const model = sdk.model("openai/gpt-oss-20b");
 
+// Concurrency Queue: Enforce 1 request at a time
+const apiQueue = new PQueue({ concurrency: 1 });
+
 const retryOperation = async (operation: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
   try {
-    return await operation();
+    // Wrap execution in the queue to ensure serial processing
+    return await apiQueue.add(async () => {
+      // Add a small delay between requests to be safe
+      await new Promise(r => setTimeout(r, 500)); 
+      return await operation();
+    });
   } catch (error: any) {
     // Retry on rate limits or temporary server errors
-    if (retries > 0 && (error.message?.includes('429') || error.message?.includes('500'))) {
+    if (retries > 0 && (error.message?.includes('429') || error.message?.includes('500') || error.message?.includes('Rate limited'))) {
       console.warn(`API Request failed. Retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
+      // Recursively retry (it will re-enter the queue)
       return retryOperation(operation, retries - 1, delay * 2);
     }
     throw error;
