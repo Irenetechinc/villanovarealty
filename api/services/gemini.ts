@@ -1,29 +1,50 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Bytez from 'bytez.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const API_KEY = process.env.GEMINI_API_KEY;
+const API_KEY = process.env.BYTEZ_API_KEY;
 
 if (!API_KEY) {
-  console.warn('GEMINI_API_KEY is not set in environment variables');
+  console.warn('BYTEZ_API_KEY is not set in environment variables');
 }
 
-const genAI = new GoogleGenerativeAI(API_KEY || '');
-// gemini-2.5-flash-lite is confirmed working (though subject to rate limits)
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
+// Initialize Bytez SDK
+const sdk = new Bytez(API_KEY || '');
+// Use the specific model requested by the user
+const model = sdk.model("openai/gpt-oss-20b");
 
 const retryOperation = async (operation: () => Promise<any>, retries = 3, delay = 1000): Promise<any> => {
   try {
     return await operation();
   } catch (error: any) {
-    if (retries > 0 && error.message.includes('429')) {
-      console.warn(`Rate limited (429). Retrying in ${delay}ms... (${retries} retries left)`);
+    // Retry on rate limits or temporary server errors
+    if (retries > 0 && (error.message?.includes('429') || error.message?.includes('500'))) {
+      console.warn(`API Request failed. Retrying in ${delay}ms... (${retries} retries left)`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return retryOperation(operation, retries - 1, delay * 2);
     }
     throw error;
   }
+};
+
+/**
+ * Helper to run the model and mimic the response structure if needed,
+ * or just return the text.
+ */
+const runQuery = async (messages: { role: string, content: string }[]) => {
+    const { error, output } = await model.run(messages);
+    if (error) {
+        throw new Error(`Bytez API Error: ${error}`);
+    }
+    
+    // Extract text content from response object
+    if (typeof output === 'object' && output !== null && 'content' in output) {
+        return (output as any).content;
+    }
+    
+    // Fallback if it's already a string
+    return String(output);
 };
 
 export const geminiService = {
@@ -66,16 +87,14 @@ export const geminiService = {
         }
       `;
 
-      const result = await retryOperation(() => model.generateContent(prompt));
-      const response = result.response;
-      const text = response.text();
+      const text = await retryOperation(() => runQuery([{ role: 'user', content: prompt }]));
       
       // Attempt to parse JSON from the response (handling potential markdown code blocks)
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error('Failed to parse JSON from Gemini response');
+        throw new Error('Failed to parse JSON from AI response');
       }
     } catch (error) {
       console.error('Error generating strategy:', error);
@@ -104,8 +123,8 @@ export const geminiService = {
         Output ONLY the new post content (plain text), no explanations.
       `;
 
-      const result = await retryOperation(() => model.generateContent(prompt));
-      return result.response.text();
+      const text = await retryOperation(() => runQuery([{ role: 'user', content: prompt }]));
+      return text;
     } catch (error) {
       console.error('Error optimizing content:', error);
       // Fallback: return original if AI fails
@@ -180,15 +199,13 @@ export const geminiService = {
         }
       `;
 
-      const result = await retryOperation(() => model.generateContent(prompt));
-      const response = result.response;
-      const text = response.text();
+      const text = await retryOperation(() => runQuery([{ role: 'user', content: prompt }]));
       
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       } else {
-        throw new Error('Failed to parse JSON from Gemini response');
+        throw new Error('Failed to parse JSON from AI response');
       }
     } catch (error) {
       console.error('Error analyzing assets:', error);
@@ -201,19 +218,17 @@ export const geminiService = {
    */
   async chat(history: { role: string; parts: string }[], newMessage: string) {
     try {
-      const chat = model.startChat({
-        history: history.map(h => ({
-          role: h.role === 'admin' ? 'user' : 'model',
-          parts: [{ text: h.parts }]
-        })),
-        generationConfig: {
-          maxOutputTokens: 1000,
-        },
-      });
+      // Convert history to Bytez/OpenAI format
+      const messages = history.map(h => ({
+        role: h.role === 'admin' ? 'user' : 'assistant', // Map 'model' to 'assistant'
+        content: h.parts
+      }));
 
-      const result = await retryOperation(() => chat.sendMessage(newMessage));
-      const response = result.response;
-      return response.text();
+      // Add the new message
+      messages.push({ role: 'user', content: newMessage });
+
+      const text = await retryOperation(() => runQuery(messages));
+      return text;
     } catch (error) {
       console.error('Error in chat:', error);
       throw error;
@@ -222,10 +237,18 @@ export const geminiService = {
 
   /**
    * Raw content generation wrapper
+   * Maintains compatibility with existing calls that expect a .response.text() structure
    */
   async generateContent(prompt: string) {
     try {
-      return await retryOperation(() => model.generateContent(prompt));
+      const text = await retryOperation(() => runQuery([{ role: 'user', content: prompt }]));
+      
+      // Return object structure that mimics Gemini SDK for compatibility
+      return {
+        response: {
+          text: () => text
+        }
+      };
     } catch (error) {
       console.error('Error generating raw content:', error);
       throw error;

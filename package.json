@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "@types/node-cron": "^3.0.11",
     "axios": "^1.6.2",
+    "bytez.js": "^3.0.0",
     "clsx": "^2.0.0",
     "cors": "^2.8.5",
     "date-fns": "^2.30.0",
