@@ -122,6 +122,9 @@ export const botService = {
 
     console.log(`[Bot] Webhook: New Message from ${username} (${senderId}): "${messageText}"`);
 
+    // 0. Send Immediate "Typing..." Indicator
+    await facebookService.sendTypingIndicator(senderId, settings.facebook_access_token);
+
     // AI Reply Logic
     try {
         // 1. Fetch Context (Last 5 messages)

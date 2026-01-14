@@ -43,15 +43,17 @@ router.get('/webhook', (req, res) => {
 
 // WEBHOOK EVENT HANDLER (POST)
 // Receives updates from Facebook (feed, messages)
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', (req, res) => {
     const body = req.body;
 
     if (body.object === 'page') {
         // Return 200 OK immediately to acknowledge receipt to Facebook
         res.status(200).send('EVENT_RECEIVED');
 
-        // Process asynchronously
-        await botService.handleWebhookEvent(body);
+        // Process asynchronously (Fire & Forget)
+        // Do NOT await here, or it delays the response to Facebook (which causes timeouts/retries)
+        botService.handleWebhookEvent(body)
+            .catch(err => console.error('[Bot] Background Webhook Processing Error:', err));
     } else {
         res.sendStatus(404);
     }

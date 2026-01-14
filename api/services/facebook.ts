@@ -206,6 +206,22 @@ export const facebookService = {
   },
 
   /**
+   * Send a "Typing On" indicator to show activity
+   */
+  async sendTypingIndicator(recipientId: string, accessToken: string) {
+      try {
+          await interactionQueue.add(() => axios.post(`https://graph.facebook.com/v21.0/me/messages`, {
+              recipient: { id: recipientId },
+              sender_action: "typing_on",
+              access_token: accessToken
+          }), 1); // High priority
+      } catch (error) {
+          // Ignore typing errors, not critical
+          // console.warn('[Facebook API] Failed to send typing indicator');
+      }
+  },
+
+  /**
    * Reply to a conversation (send message)
    */
   async sendMessage(recipientId: string, message: string, accessToken: string) {
