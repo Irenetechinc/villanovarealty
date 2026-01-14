@@ -11,6 +11,11 @@ import { logActivity } from '../logger.js';
 export const botService = {
   // Store processed IDs in memory for cache speed
   processedIds: new Set<string>(),
+  
+  // Debug stats
+  lastWebhookTime: 0,
+  lastProcessedId: '',
+  webhookCount: 0,
 
   /**
    * Start the monitoring loop
@@ -47,30 +52,46 @@ export const botService = {
    * Handle Incoming Webhook Event (Real-Time)
    */
   async handleWebhookEvent(body: any) {
+    this.lastWebhookTime = Date.now();
+    this.webhookCount++;
+    
     try {
-        console.log('[Bot] ⚡ Real-time Webhook Triggered!');
+        console.log(`[Bot] ⚡ Real-time Webhook Triggered! (#${this.webhookCount})`);
         // EXTREMELY IMPORTANT: Log the raw body to debug field mismatches
-        console.log('[Bot] Webhook RAW:', JSON.stringify(body, null, 2));
+        // Use JSON.stringify safely
+        try {
+            console.log('[Bot] Webhook RAW:', JSON.stringify(body, null, 2));
+        } catch (e) {
+            console.log('[Bot] Webhook RAW (Unstringifiable):', body);
+        }
 
         if (body.object === 'page') {
+            if (!body.entry || !Array.isArray(body.entry)) {
+                console.warn('[Bot] Webhook has no valid "entry" array.');
+                return;
+            }
+
             for (const entry of body.entry) {
-                const pageId = entry.id;
+                const pageId = String(entry.id); // Ensure string
                 
                 // 1. Handle Messages
                 if (entry.messaging) {
-                    console.log(`[Bot] Processing ${entry.messaging.length} messaging events...`);
+                    console.log(`[Bot] Processing ${entry.messaging.length} messaging events for Page ${pageId}...`);
                     for (const messageEvent of entry.messaging) {
+                        // FIX: Ensure we handle messages that might not be 'is_echo' but are still bot-sent or system messages
+                        // We also need to be careful not to process our own messages if 'is_echo' is false (rare but possible with some setups)
                         if (messageEvent.message && !messageEvent.message.is_echo) {
+                            // Check for quick replies or attachments too, but for now text is priority
                             await this.processIncomingMessage(pageId, messageEvent);
                         } else {
-                            console.log('[Bot] Skipped messaging event (echo or no message):', messageEvent);
+                            console.log('[Bot] Skipped messaging event (echo or no message):', JSON.stringify(messageEvent));
                         }
                     }
                 }
 
                 // 2. Handle Feed/Comments/Changes
                 if (entry.changes) {
-                    console.log(`[Bot] Processing ${entry.changes.length} changes...`);
+                    console.log(`[Bot] Processing ${entry.changes.length} changes for Page ${pageId}...`);
                     for (const change of entry.changes) {
                         try {
                             const value = change.value;
@@ -88,6 +109,8 @@ export const botService = {
                     }
                 }
             }
+        } else {
+            console.warn(`[Bot] Ignored webhook object type: ${body.object}`);
         }
     } catch (error) {
         console.error('[Bot] Webhook Handler Error:', error);
@@ -95,16 +118,19 @@ export const botService = {
   },
 
   async processIncomingMessage(pageId: string, event: any) {
-    const senderId = event.sender.id;
+    const senderId = String(event.sender.id);
     const messageText = event.message.text;
-    const messageId = event.message.mid;
+    const messageId = String(event.message.mid);
 
     if (this.processedIds.has(messageId)) {
         console.log(`[Bot] Skipping already processed message: ${messageId}`);
         return;
     }
 
+    console.log(`[Bot] Processing message ${messageId} from ${senderId}...`);
+
     // Get Admin ID associated with this Page
+    // Ensure pageId is treated as string for query
     const { data: settings } = await supabaseAdmin
         .from('adroom_settings')
         .select('admin_id, facebook_access_token')
@@ -112,13 +138,18 @@ export const botService = {
         .single();
 
     if (!settings) {
-        console.error(`[Bot] No settings found for Page ID ${pageId}`);
+        console.error(`[Bot] No settings found for Page ID ${pageId}. Cannot reply.`);
         return;
     }
 
     // Use User Profile for better logs
-    const userProfile = await facebookService.getUserProfile(senderId, settings.facebook_access_token);
-    const username = userProfile.name || 'Unknown User';
+    let username = 'Unknown User';
+    try {
+        const userProfile = await facebookService.getUserProfile(senderId, settings.facebook_access_token);
+        username = userProfile.name || 'Unknown User';
+    } catch (e) {
+        console.warn(`[Bot] Failed to fetch user profile for ${senderId}`);
+    }
 
     console.log(`[Bot] Webhook: New Message from ${username} (${senderId}): "${messageText}"`);
 
@@ -155,20 +186,24 @@ export const botService = {
         const aiReply = await geminiService.generateContent(prompt);
         const replyText = aiReply.response.text().trim();
 
+        console.log(`[Bot] Generated AI Reply: "${replyText}"`);
+
         // Send Reply
         await facebookService.sendMessage(senderId, replyText, settings.facebook_access_token);
         
         // Record
         await this.recordInteraction(settings.admin_id, messageId, 'message', replyText);
+        this.lastProcessedId = messageId;
+
     } catch (err) {
         console.error('[Bot] Failed to process message:', err);
     }
   },
 
   async processIncomingComment(pageId: string, value: any) {
-    const commentId = value.comment_id;
+    const commentId = String(value.comment_id);
     const message = value.message;
-    const senderId = value.from.id;
+    const senderId = String(value.from.id);
 
     // Ignore self
     if (senderId === pageId) return;
@@ -208,6 +243,7 @@ export const botService = {
 
         // Record
         await this.recordInteraction(settings.admin_id, commentId, 'comment', replyText);
+        this.lastProcessedId = commentId;
     } catch (err) {
         console.error('[Bot] Failed to process comment:', err);
     }

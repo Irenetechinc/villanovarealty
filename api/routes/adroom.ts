@@ -41,6 +41,16 @@ router.get('/webhook', (req, res) => {
     }
 });
 
+// DEBUG: Status Endpoint
+router.get('/debug/status', (_req, res) => {
+    res.json({
+        webhookCount: botService.webhookCount,
+        lastWebhookTime: botService.lastWebhookTime,
+        lastProcessedId: botService.lastProcessedId,
+        processedIdsCount: botService.processedIds.size
+    });
+});
+
 // WEBHOOK EVENT HANDLER (POST)
 // Receives updates from Facebook (feed, messages)
 router.post('/webhook', (req, res) => {
