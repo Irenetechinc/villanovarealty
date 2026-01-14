@@ -48,13 +48,31 @@ const runQuery = async (messages: { role: string, content: string }[]) => {
         throw new Error(`Bytez API Error: ${error}`);
     }
     
+    let content = '';
+    
     // Extract text content from response object
     if (typeof output === 'object' && output !== null && 'content' in output) {
-        return (output as any).content;
+        content = (output as any).content;
+    } else {
+        content = String(output);
+    }
+
+    // CLEANUP: Remove "Chain of Thought" / "Analysis" artifacts from the model
+    // Pattern: analysis...assistantfinal...
+    // We only want what comes after "assistantfinal"
+    if (content.includes('assistantfinal')) {
+        const parts = content.split('assistantfinal');
+        if (parts.length > 1) {
+            content = parts[parts.length - 1].trim();
+        }
+    } else if (content.includes('assistant final')) { // Check for space variation
+        const parts = content.split('assistant final');
+        if (parts.length > 1) {
+            content = parts[parts.length - 1].trim();
+        }
     }
     
-    // Fallback if it's already a string
-    return String(output);
+    return content;
 };
 
 export const geminiService = {

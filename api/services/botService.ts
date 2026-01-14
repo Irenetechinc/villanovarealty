@@ -29,9 +29,9 @@ export const botService = {
     // STARTUP SCAN: Immediately check for missed interactions while offline
     this.initialScan();
 
-    // REDUCED POLLING: Fallback only (every 30 minutes instead of 10s)
+    // REDUCED POLLING: Fallback only (every 30 seconds)
     // Primary trigger should be Webhooks to save API quota
-    setInterval(() => this.monitorCycle(), 1800000); 
+    setInterval(() => this.monitorCycle(), 30000); 
   },
 
   async initialScan() {
