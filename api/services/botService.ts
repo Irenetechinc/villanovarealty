@@ -246,6 +246,13 @@ export const botService = {
   async processIncomingComment(pageId: string, value: any) {
     const commentId = String(value.comment_id);
     const message = value.message;
+    
+    // Critical Fix: Validate sender data BEFORE accessing it
+    if (!value.from || !value.from.id) {
+        console.warn(`[Bot] Skipping comment ${commentId}: Missing 'from' user data (likely a privacy setting or system update).`);
+        return;
+    }
+
     const senderId = String(value.from.id);
 
     // Ignore self
@@ -280,13 +287,7 @@ export const botService = {
         return;
     }
 
-    const username = value.from?.name || 'Unknown User';
-    // Fix: Handle cases where 'from' might be missing or incomplete
-    if (!value.from || !value.from.id) {
-        console.warn(`[Bot] Skipping comment ${commentId}: Missing 'from' user data.`);
-        return;
-    }
-    
+    const username = value.from.name || 'Unknown User';
     console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
     try {
