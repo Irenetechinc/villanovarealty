@@ -342,7 +342,7 @@ export const facebookService = {
       const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,
-          metric: 'page_impressions,page_post_engagements',
+          metric: 'page_impressions', // Reduced to single reliable metric first
           period: 'day'
         }
       }));
@@ -353,20 +353,27 @@ export const facebookService = {
 
       if (data) {
         const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
-        const engagementMetric = data.find((m: any) => m.name === 'page_post_engagements');
-        
-        // Use the most recent day's value
-        // The API returns values array. values[1] is usually yesterday (complete data), values[0] might be older depending on sorting.
-        // Actually, Graph API returns ascending date. The last item is the most recent.
-        // Let's grab the LAST value in the array to be safe.
         
         if (impressionsMetric?.values?.length) {
             reach = impressionsMetric.values[impressionsMetric.values.length - 1].value || 0;
         }
-        
-        if (engagementMetric?.values?.length) {
-            engagement = engagementMetric.values[engagementMetric.values.length - 1].value || 0;
-        }
+      }
+      
+      // Try to get engagement separately (if it fails, we still have reach)
+      try {
+          const engRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
+            params: {
+              access_token: accessToken,
+              metric: 'page_post_engagements',
+              period: 'day'
+            }
+          }));
+          const engData = engRes.data.data?.[0];
+          if (engData?.values?.length) {
+              engagement = engData.values[engData.values.length - 1].value || 0;
+          }
+      } catch (ignore) {
+          // console.warn('Engagement metric not available');
       }
 
       return { reach, engagement };
