@@ -334,13 +334,15 @@ export const facebookService = {
    */
   async getInsights(pageId: string, accessToken: string) {
     try {
-      // GET /{page-id}/insights?metric=page_impressions,page_engaged_users&period=day
-      // 'page_post_engagements' is deprecated/unreliable in some versions.
-      // 'page_engaged_users' is a good proxy for total engagement.
+      // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
+      // Note: 'page_engaged_users' often requires specific permissions or token types.
+      // 'page_post_engagements' is more commonly available for Page Tokens.
+      // Also, the 'period' parameter is sometimes finicky.
+      
       const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,
-          metric: 'page_impressions,page_engaged_users',
+          metric: 'page_impressions,page_post_engagements',
           period: 'day'
         }
       }));
@@ -351,36 +353,29 @@ export const facebookService = {
 
       if (data) {
         const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
-        const engagementMetric = data.find((m: any) => m.name === 'page_engaged_users');
+        const engagementMetric = data.find((m: any) => m.name === 'page_post_engagements');
         
-        // Get most recent value (usually index 0 or 1 depending on day)
-        // API returns data sorted by date usually. We take the latest available day.
-        reach = impressionsMetric?.values[1]?.value || impressionsMetric?.values[0]?.value || 0;
-        engagement = engagementMetric?.values[1]?.value || engagementMetric?.values[0]?.value || 0;
+        // Use the most recent day's value
+        // The API returns values array. values[1] is usually yesterday (complete data), values[0] might be older depending on sorting.
+        // Actually, Graph API returns ascending date. The last item is the most recent.
+        // Let's grab the LAST value in the array to be safe.
+        
+        if (impressionsMetric?.values?.length) {
+            reach = impressionsMetric.values[impressionsMetric.values.length - 1].value || 0;
+        }
+        
+        if (engagementMetric?.values?.length) {
+            engagement = engagementMetric.values[engagementMetric.values.length - 1].value || 0;
+        }
       }
 
       return { reach, engagement };
     } catch (error: any) {
-      // Handle (#100) invalid metric error by falling back to simpler metric
-      if (error.response?.data?.error?.code === 100) {
-          console.warn('[Facebook API] Insights metric error, trying fallback (page_impressions only)...');
-          try {
-             const fallbackRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
-                params: {
-                  access_token: accessToken,
-                  metric: 'page_impressions',
-                  period: 'day'
-                }
-              }));
-             const imp = fallbackRes.data.data?.[0]?.values?.[1]?.value || fallbackRes.data.data?.[0]?.values?.[0]?.value || 0;
-             return { reach: imp, engagement: 0 };
-          } catch (e) {
-             console.error('[Facebook API] Fallback Insights Failed:', e);
-             return { reach: 0, engagement: 0 };
-          }
-      }
+      console.warn(`[Facebook API] Insights Warning for ${pageId}:`, error.response?.data?.error?.message || error.message);
       
-      console.error('[Facebook API] Insights Error:', error.response?.data || error.message);
+      // Fallback: Return 0 instead of crashing, or try a simpler query if needed.
+      // The error shown by user (Status 400) usually means invalid metric or period for this object/token.
+      // We return safe defaults to keep the dashboard alive.
       return { reach: 0, engagement: 0 };
     }
   }
