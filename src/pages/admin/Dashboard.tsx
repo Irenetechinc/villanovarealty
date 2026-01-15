@@ -709,16 +709,18 @@ const Dashboard = () => {
 
   return (
     <div className="bg-gray-50 min-h-screen">
-      <AdminSidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        isCollapsed={isSidebarCollapsed}
-        setIsCollapsed={setIsSidebarCollapsed}
-      />
+      {activeTab !== 'adroom' && (
+        <AdminSidebar 
+          activeTab={activeTab} 
+          setActiveTab={setActiveTab} 
+          isCollapsed={isSidebarCollapsed}
+          setIsCollapsed={setIsSidebarCollapsed}
+        />
+      )}
       
-      <div className={`transition-all duration-300 ${isSidebarCollapsed ? 'ml-20' : 'ml-64'} ${activeTab === 'adroom' ? 'p-0 pt-0 h-screen' : 'p-8 pt-24'}`}>
+      <div className={`transition-all duration-300 ${activeTab !== 'adroom' ? (isSidebarCollapsed ? 'ml-20' : 'ml-64') : ''} ${activeTab === 'adroom' ? 'p-0 h-screen' : 'p-8 pt-24'}`}>
         {activeTab === 'analytics' && <AnalyticsDashboard />}
-        {activeTab === 'adroom' && <div className="pt-0 h-full"><AdRoom /></div>}
+        {activeTab === 'adroom' && <div className="h-full pt-20"><AdRoom onExit={() => setActiveTab('analytics')} /></div>}
         {activeTab === 'auctions' && <AuctionManagement />}
         {activeTab === 'users' && <UserManagement />}
         

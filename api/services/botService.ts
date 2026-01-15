@@ -77,7 +77,7 @@ export const botService = {
       }
       if (this.queuedTaskIds.has(task.id)) {
           // Already queued, don't add duplicate
-          // console.log(`[Bot] Task ${task.id} already queued. Skipping duplicate.`);
+            console.log(`[Bot] Task ${task.id} already queued. Skipping duplicate.`);
           return;
       }
 

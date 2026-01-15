@@ -3,12 +3,16 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Settings, Loader2, Send, Bot, Wallet, 
   Activity, PlayCircle, XCircle, Zap, 
-  MessageSquare, Clock, BarChart3, Terminal, CheckCircle2, AlertOctagon
+  MessageSquare, Clock, BarChart3, Terminal, CheckCircle2, AlertOctagon, ArrowLeft
 } from 'lucide-react';
 import WalletManagement from './WalletManagement';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Interfaces ---
+
+interface AdRoomProps {
+  onExit?: () => void;
+}
 
 interface StrategyContent {
   theme: string;
@@ -52,7 +56,7 @@ interface Insights {
 
 // --- Main Component ---
 
-const AdRoom = () => {
+const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   // State
   const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor'>('dashboard');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -493,6 +497,15 @@ const AdRoom = () => {
         </div>
 
         <nav className="flex-1 space-y-2 px-2">
+            {/* Back to Main Admin Button */}
+            <button
+                onClick={onExit}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300 group text-slate-400 hover:bg-slate-800 hover:text-white mb-4 border-b border-slate-800 pb-4"
+            >
+                <ArrowLeft className="h-5 w-5 group-hover:-translate-x-1 transition-transform" />
+                <span className="hidden lg:block font-medium">Back to Admin</span>
+            </button>
+
             {[
                 { id: 'dashboard', icon: Activity, label: 'Command Center' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
