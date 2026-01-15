@@ -333,34 +333,32 @@ export const facebookService = {
    * Get Page Insights (Reach, Engagement)
    */
   async getInsights(pageId: string, accessToken: string) {
+    let reach = 0;
+    let engagement = 0;
+
+    // 1. Try Primary Metric: page_impressions (Reach)
     try {
-      // GET /{page-id}/insights?metric=page_impressions,page_post_engagements&period=day
-      // Note: 'page_engaged_users' often requires specific permissions or token types.
-      // 'page_post_engagements' is more commonly available for Page Tokens.
-      // Also, the 'period' parameter is sometimes finicky.
-      
       const response = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
         params: {
           access_token: accessToken,
-          metric: 'page_impressions', // Reduced to single reliable metric first
+          metric: 'page_impressions',
           period: 'day'
         }
       }));
 
       const data = response.data.data;
-      let reach = 0;
-      let engagement = 0;
-
       if (data) {
         const impressionsMetric = data.find((m: any) => m.name === 'page_impressions');
-        
         if (impressionsMetric?.values?.length) {
             reach = impressionsMetric.values[impressionsMetric.values.length - 1].value || 0;
         }
       }
+    } catch (error: any) {
+        console.warn(`[Facebook API] Reach Metric Failed: ${error.response?.data?.error?.message || error.message}`);
+    }
       
-      // Try to get engagement separately (if it fails, we still have reach)
-      try {
+    // 2. Try Engagement Metric: page_post_engagements
+    try {
           const engRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
             params: {
               access_token: accessToken,
@@ -372,18 +370,26 @@ export const facebookService = {
           if (engData?.values?.length) {
               engagement = engData.values[engData.values.length - 1].value || 0;
           }
-      } catch (ignore) {
-          // console.warn('Engagement metric not available');
-      }
-
-      return { reach, engagement };
     } catch (error: any) {
-      console.warn(`[Facebook API] Insights Warning for ${pageId}:`, error.response?.data?.error?.message || error.message);
-      
-      // Fallback: Return 0 instead of crashing, or try a simpler query if needed.
-      // The error shown by user (Status 400) usually means invalid metric or period for this object/token.
-      // We return safe defaults to keep the dashboard alive.
-      return { reach: 0, engagement: 0 };
+          // If page_post_engagements fails (common for some page types), try 'page_engaged_users' as fallback
+          // console.warn(`[Facebook API] Engagement Metric Failed, trying fallback...`);
+          try {
+              const fallbackRes = await interactionQueue.add(() => axios.get(`https://graph.facebook.com/v21.0/${pageId}/insights`, {
+                params: {
+                  access_token: accessToken,
+                  metric: 'page_engaged_users',
+                  period: 'day'
+                }
+              }));
+              const fallbackData = fallbackRes.data.data?.[0];
+              if (fallbackData?.values?.length) {
+                  engagement = fallbackData.values[fallbackData.values.length - 1].value || 0;
+              }
+          } catch (finalError) {
+              // Both failed, ignore
+          }
     }
+
+    return { reach, engagement };
   }
 };
