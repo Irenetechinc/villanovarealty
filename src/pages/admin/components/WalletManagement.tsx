@@ -149,11 +149,15 @@ const WalletManagementContent = ({ balance, setBalance, transactions, isLoading,
 
     setIsDepositing(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       
       const response = await fetch(`${API_URL}/api/wallet/deposit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+        },
         body: JSON.stringify({ admin_id: user?.id, amount }),
       });
 
