@@ -81,7 +81,11 @@ const WalletManagementContent = ({ balance, setBalance, transactions, isLoading,
   const [readyToPay, setReadyToPay] = useState(false);
   const [transactionFee, setTransactionFee] = useState(0);
 
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  // In production, we ignore VITE_API_URL to ensure relative paths are used (same origin)
+  // This prevents issues where VITE_API_URL might be incorrectly set to localhost in build environment
+  const API_URL = import.meta.env.MODE === 'production' 
+    ? '' 
+    : (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
 
   const [fwConfig, setFwConfig] = useState<any>(null);
 
