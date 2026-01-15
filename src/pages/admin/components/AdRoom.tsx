@@ -528,9 +528,9 @@ const AdRoom = () => {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
-        {/* Futuristic Background */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"></div>
-        <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/10 via-slate-950 to-slate-950 pointer-events-none"></div>
+        {/* Futuristic Background - Opacity Reduced */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none opacity-20"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/5 via-slate-950 to-slate-950 pointer-events-none opacity-20"></div>
 
         <AnimatePresence mode="wait">
         {view === 'dashboard' && (
@@ -699,7 +699,7 @@ const AdRoom = () => {
              >
                  <h1 className="text-3xl font-bold text-white mb-8">Strategy Health Monitor</h1>
                  
-                 <div className="grid gap-6">
+                 <div className="grid gap-6 pb-20"> {/* Added padding bottom for scroll */}
                      {strategyHealth.length === 0 ? (
                          <div className="text-slate-500 text-center py-10">No active strategies to monitor.</div>
                      ) : (
@@ -722,6 +722,23 @@ const AdRoom = () => {
                                      </div>
                                  </div>
                                  
+                                 {/* Progress Bar for Weekly Goal (7 posts) */}
+                                 <div className="mb-4">
+                                     <div className="flex justify-between text-xs text-slate-400 mb-1">
+                                         <span>Weekly Progress</span>
+                                         <span>{Math.min(strat.posts_count, 7)} / 7 Days</span>
+                                     </div>
+                                     <div className="w-full bg-slate-800 rounded-full h-2">
+                                         <div 
+                                             className={`h-2 rounded-full ${strat.posts_count >= 7 ? 'bg-green-500' : 'bg-cyan-500'}`} 
+                                             style={{ width: `${Math.min((strat.posts_count / 7) * 100, 100)}%` }}
+                                         ></div>
+                                     </div>
+                                     {strat.posts_count < 7 && (
+                                         <p className="text-xs text-yellow-500 mt-1">Warning: Strategy has less than 7 scheduled posts. Auto-fix recommended.</p>
+                                     )}
+                                 </div>
+                                 
                                  {strat.alerts.length > 0 && (
                                      <div className="bg-red-500/10 border border-red-500/20 rounded p-3 mb-4">
                                          <h4 className="text-red-400 font-bold text-sm mb-2 flex items-center"><AlertOctagon className="h-4 w-4 mr-2"/> Active Alerts</h4>
@@ -734,7 +751,7 @@ const AdRoom = () => {
                                  )}
                                  
                                  <div className="flex space-x-3 mt-4">
-                                     {strat.status !== 'healthy' && (
+                                     {(strat.status !== 'healthy' || strat.posts_count < 7) && (
                                          <button 
                                             onClick={async () => {
                                                 if(!confirm('Trigger manual auto-fix?')) return;
