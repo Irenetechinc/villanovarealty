@@ -280,7 +280,13 @@ export const botService = {
         return;
     }
 
-    const username = value.from.name || 'Unknown User';
+    const username = value.from?.name || 'Unknown User';
+    // Fix: Handle cases where 'from' might be missing or incomplete
+    if (!value.from || !value.from.id) {
+        console.warn(`[Bot] Skipping comment ${commentId}: Missing 'from' user data.`);
+        return;
+    }
+    
     console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
     try {
