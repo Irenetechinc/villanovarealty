@@ -9,8 +9,9 @@ import AnalyticsDashboard from './components/AnalyticsDashboard';
 import AuctionManagement from './components/AuctionManagement';
 import UserManagement from './components/UserManagement';
 import AdRoom from './components/AdRoom';
+import Subscription from './components/Subscription';
 
-type TabType = 'analytics' | 'properties' | 'projects' | 'auctions' | 'agents' | 'users' | 'messages' | 'contact' | 'about' | 'adroom';
+type TabType = 'analytics' | 'properties' | 'projects' | 'auctions' | 'agents' | 'users' | 'messages' | 'contact' | 'about' | 'adroom' | 'subscription';
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<TabType>('analytics');
@@ -721,6 +722,7 @@ const Dashboard = () => {
       <div className={`transition-all duration-300 ${activeTab !== 'adroom' ? (isSidebarCollapsed ? 'ml-20' : 'ml-64') : ''} ${activeTab === 'adroom' ? 'p-0 h-screen' : 'p-8 pt-24'}`}>
         {activeTab === 'analytics' && <AnalyticsDashboard />}
         {activeTab === 'adroom' && <div className="pt-10 h-full"><AdRoom onExit={() => setActiveTab('analytics')} /></div>}
+        {activeTab === 'subscription' && <Subscription />}
         {activeTab === 'auctions' && <AuctionManagement />}
         {activeTab === 'users' && <UserManagement />}
         

@@ -138,6 +138,13 @@ router.post('/analyze', async (req, res) => {
       return res.json({ status: 'proposed', strategies: cachedStrategies });
     }
 
+    // --- CREDIT DEDUCTION FOR ANALYSIS ---
+    try {
+        await walletService.deductCredits(admin_id, 1, 'Strategy Analysis');
+    } catch (creditError: any) {
+        return res.status(402).json({ error: `Insufficient AdRoom Credits for analysis. Please upgrade your plan.` });
+    }
+
     // Fetch data with images
     const [propertiesRes, auctionsRes, projectsRes] = await Promise.all([
       supabaseAdmin.from('properties').select('*, property_images(url)'),
@@ -173,14 +180,25 @@ router.post('/approve', async (req, res) => {
   try {
     const { admin_id, type, content, expected_outcome } = req.body;
 
-    // --- PAYMENT VERIFICATION (If Paid Strategy) ---
+    // --- 1. CREDIT DEDUCTION (Automation Cost) ---
+    const postsCount = content.content_plan?.length || 0;
+    const creditsNeeded = Math.max(1, postsCount); 
+
+    try {
+        await walletService.deductCredits(admin_id, creditsNeeded, `Strategy Execution (${postsCount} posts)`);
+    } catch (creditError: any) {
+        return res.status(402).json({ error: `Insufficient AdRoom Credits: ${creditError.message}` });
+    }
+
+    // --- 2. PAYMENT VERIFICATION (Ad Spend) ---
     if (type === 'paid') {
-      const ESTIMATED_COST = 5000; // Define cost per paid strategy (e.g., NGN 5000)
+      const ESTIMATED_COST = 5000; 
       
       try {
-        // Verify and Deduct Funds
         await walletService.deductFunds(admin_id, ESTIMATED_COST, 'ad_spend');
       } catch (paymentError: any) {
+        // ROLLBACK CREDITS
+        await walletService.addCredits(admin_id, creditsNeeded, 'Refund: Payment Failed');
         return res.status(402).json({ error: `Payment Failed: ${paymentError.message}. Please fund your wallet.` });
       }
     }

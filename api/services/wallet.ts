@@ -205,6 +205,135 @@ export const walletService = {
   },
 
   /**
+   * Get credit usage logs
+   */
+  async getCreditLogs(walletId: string) {
+    const { data, error } = await supabaseAdmin
+      .from('credit_usage_logs')
+      .select('*')
+      .eq('wallet_id', walletId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Deduct credits for automation
+   * @param amount Number of credits to deduct (e.g. 1 per call)
+   */
+  async deductCredits(adminId: string, amount: number, description: string) {
+    const wallet = await this.getBalance(adminId);
+    if (!wallet) throw new Error('Wallet not found');
+
+    // Use RPC if available, otherwise manual check-and-update
+    // We try RPC first (defined in migration)
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('deduct_credits', {
+        p_wallet_id: wallet.id,
+        p_amount: amount,
+        p_description: description
+    });
+
+    if (!rpcError && rpcResult) {
+        if (!rpcResult.success) {
+            throw new Error(rpcResult.message);
+        }
+        return rpcResult.new_balance;
+    }
+
+    // Fallback if RPC not applied yet
+    if (wallet.credits < amount) {
+        throw new Error(`Insufficient AdRoom Credits. Balance: ${wallet.credits}, Required: ${amount}`);
+    }
+
+    const newCredits = wallet.credits - amount;
+
+    const { error: updateError } = await supabaseAdmin
+        .from('wallets')
+        .update({ credits: newCredits })
+        .eq('id', wallet.id);
+
+    if (updateError) throw updateError;
+
+    // Log it
+    await supabaseAdmin.from('credit_usage_logs').insert({
+        wallet_id: wallet.id,
+        amount: -amount,
+        action_type: 'usage',
+        description
+    });
+
+    return newCredits;
+  },
+
+  /**
+   * Add credits (e.g. subscription renewal or top-up)
+   */
+  async addCredits(walletId: string, amount: number, description: string) {
+      const { data: wallet } = await supabaseAdmin
+          .from('wallets')
+          .select('credits')
+          .eq('id', walletId)
+          .single();
+      
+      const current = wallet?.credits || 0;
+      const newBalance = current + amount;
+
+      await supabaseAdmin.from('wallets').update({ credits: newBalance }).eq('id', walletId);
+      
+      await supabaseAdmin.from('credit_usage_logs').insert({
+        wallet_id: walletId,
+        amount: amount,
+        action_type: 'refill',
+        description
+      });
+
+      return newBalance;
+  },
+
+  /**
+   * Update Subscription Plan
+   */
+  async updateSubscription(adminId: string, plan: 'free' | 'pro_monthly' | 'pro_yearly') {
+      const wallet = await this.getBalance(adminId);
+      
+      let creditsToAdd = 0;
+      let durationMonths = 1;
+
+      if (plan === 'pro_monthly') {
+          creditsToAdd = 600;
+          durationMonths = 1;
+      } else if (plan === 'pro_yearly') {
+          creditsToAdd = 600 * 12; // Or give monthly? Usually give bulk or reset monthly. 
+          // User said "600 credits", implying monthly. Let's assume we set a flag to auto-refill.
+          // For simplicity MVP, let's just add the first month's batch.
+          creditsToAdd = 600; 
+          durationMonths = 12;
+      } else {
+          // Free
+          creditsToAdd = 25;
+      }
+
+      // Calculate end date
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + durationMonths);
+
+      await supabaseAdmin.from('wallets').update({
+          subscription_plan: plan,
+          credits: creditsToAdd, // Reset/Add? Let's Reset to plan limit for now
+          subscription_cycle_start: new Date(),
+          subscription_cycle_end: endDate
+      }).eq('id', wallet.id);
+
+      await supabaseAdmin.from('credit_usage_logs').insert({
+          wallet_id: wallet.id,
+          amount: creditsToAdd,
+          action_type: 'subscription_update',
+          description: `Upgraded to ${plan}`
+      });
+  },
+
+  /**
    * Deduct funds for services (Ads, AI)
    */
   async deductFunds(adminId: string, amount: number, type: 'ad_spend' | 'gemini_usage') {

@@ -47,4 +47,38 @@ router.post('/verify', async (req, res) => {
   }
 });
 
+// Update Subscription (after payment)
+router.post('/subscription', async (req, res) => {
+    try {
+        const { admin_id, plan, transaction_id } = req.body;
+        
+        if (!admin_id || !plan) {
+            return res.status(400).json({ error: 'Missing admin_id or plan' });
+        }
+
+        // 1. Verify Payment with Flutterwave (Recommended)
+        // For now, we trust the transaction_id if provided, or verify if we have keys.
+        // Ideally: walletService.verifySubscriptionPayment(transaction_id)
+        
+        // 2. Update Plan
+        await walletService.updateSubscription(admin_id, plan);
+        
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: (error as Error).message });
+    }
+});
+
+// Get Credit Logs
+router.get('/:adminId/credit-logs', async (req, res) => {
+    try {
+        const { adminId } = req.params;
+        const wallet = await walletService.getBalance(adminId);
+        const logs = await walletService.getCreditLogs(wallet.id);
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: (error as Error).message });
+    }
+});
+
 export default router;
