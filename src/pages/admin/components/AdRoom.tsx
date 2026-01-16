@@ -517,6 +517,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 <button
                     key={item.id}
                     onClick={() => setView(item.id as any)}
+                    title={item.label}
                     className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-300 group ${
                         view === item.id 
                         ? 'bg-cyan-500/10 text-cyan-400 border-r-2 border-cyan-400' 
