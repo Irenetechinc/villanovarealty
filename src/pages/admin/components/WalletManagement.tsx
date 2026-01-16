@@ -198,6 +198,10 @@ const WalletManagementContent = ({ balance, setBalance, transactions, isLoading,
           logo: 'https://st2.depositphotos.com/4403291/7418/v/450/depositphotos_74189661-stock-illustration-online-shop-log.jpg',
         },
       });
+      console.log('FW Config Prepared:', { 
+          hasKey: !!import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY, 
+          tx_ref: transaction.id 
+      });
       setReadyToPay(true);
       setIsDepositing(false); // Stop loading, show Pay button
 
@@ -404,15 +408,30 @@ const WalletManagementContent = ({ balance, setBalance, transactions, isLoading,
 const FlutterwavePaymentButton = ({ config, onSuccess, onClose, text }: any) => {
   const handleFlutterwavePayment = useFlutterwave(config);
 
+  const handleClick = () => {
+    // Debugging check
+    if (!config.public_key) {
+      alert("Payment System Error: Missing Flutterwave Public Key. Please check your configuration.");
+      console.error("Flutterwave config missing public_key:", config);
+      return;
+    }
+    
+    // Safely call the hook function
+    if (handleFlutterwavePayment) {
+        handleFlutterwavePayment({
+            callback: onSuccess,
+            onClose: onClose,
+        });
+    } else {
+        console.error("Flutterwave hook failed to initialize");
+        alert("Payment system initializing... please try again in a moment.");
+    }
+  };
+
   return (
     <button
       type="button"
-      onClick={() => {
-        handleFlutterwavePayment({
-          callback: onSuccess,
-          onClose: onClose,
-        });
-      }}
+      onClick={handleClick}
       className="w-full bg-green-600 text-white py-2.5 rounded-xl font-bold text-sm hover:bg-green-500 transition-all flex items-center justify-center shadow-lg shadow-green-900/20"
     >
       <CreditCard className="h-4 w-4 mr-2" />
