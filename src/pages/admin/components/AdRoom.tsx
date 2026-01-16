@@ -58,7 +58,7 @@ interface Insights {
 
 const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   // State
-  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor'>('dashboard');
+  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor' | 'subscription'>('dashboard');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -877,6 +877,22 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             </motion.div>
         )}
 
+        {/* VIEW: SUBSCRIPTION */}
+        {view === 'subscription' && (
+             <motion.div 
+                key="subscription"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full overflow-y-auto p-8 bg-slate-950"
+             >
+                 <div className="max-w-6xl mx-auto">
+                     <h1 className="text-2xl font-bold text-white mb-6">Subscription & Credit Usage</h1>
+                     <Subscription />
+                 </div>
+             </motion.div>
+        )}
+
         {/* VIEW: WALLET */}
         {view === 'wallet' && (
              <motion.div 
@@ -887,7 +903,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 className="h-full overflow-y-auto p-8 bg-slate-950"
              >
                  <div className="max-w-4xl mx-auto">
-                     <h1 className="text-2xl font-bold text-white mb-6">Wallet Management</h1>
+                     <h1 className="text-2xl font-bold text-white mb-6">Ads Wallet Management</h1>
                      <WalletManagement />
                  </div>
              </motion.div>

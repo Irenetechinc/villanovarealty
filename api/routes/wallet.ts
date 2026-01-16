@@ -69,6 +69,17 @@ router.post('/subscription', async (req, res) => {
     }
 });
 
+// Top Up Credits
+router.post('/topup', async (req, res) => {
+    try {
+        const { admin_id, flutterwave_ref, package_id } = req.body;
+        const result = await walletService.completeTopUp(admin_id, flutterwave_ref, package_id);
+        res.json(result);
+    } catch (error) {
+        res.status(500).json({ error: (error as Error).message });
+    }
+});
+
 // Get Credit Logs
 router.get('/:adminId/credit-logs', async (req, res) => {
     try {

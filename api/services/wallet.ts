@@ -334,6 +334,39 @@ export const walletService = {
   },
 
   /**
+   * Verify and complete a Credit Top-Up (called after payment gateway success)
+   */
+  async completeTopUp(adminId: string, flutterwaveRef: string, packageId: string) {
+      // 1. Verify with Flutterwave
+      if (!FLUTTERWAVE_SECRET_KEY) {
+          throw new Error('Server configuration error: Missing Flutterwave Secret Key');
+      }
+
+      const response = await axios.get(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${flutterwaveRef}`, {
+          headers: { Authorization: `Bearer ${FLUTTERWAVE_SECRET_KEY}` }
+      });
+
+      const responseBody = response.data;
+      if (responseBody.status !== 'success' || !responseBody.data || responseBody.data.status !== 'successful') {
+           throw new Error(`Payment verification failed: ${responseBody.message || 'Transaction not successful'}`);
+      }
+
+      // 2. Determine Credits
+      let credits = 0;
+      let cost = 0;
+      if (packageId === 'topup_600') { credits = 600; cost = 35; }
+      else if (packageId === 'topup_300') { credits = 300; cost = 16; }
+      else if (packageId === 'topup_100') { credits = 100; cost = 12; }
+      else { throw new Error('Invalid package ID'); }
+
+      // 3. Add Credits
+      const wallet = await this.getBalance(adminId);
+      await this.addCredits(wallet.id, credits, `Top-up: ${credits} credits ($${cost})`);
+
+      return { success: true, newCredits: wallet.credits + credits };
+  },
+
+  /**
    * Deduct funds for services (Ads, AI)
    */
   async deductFunds(adminId: string, amount: number, type: 'ad_spend' | 'gemini_usage') {

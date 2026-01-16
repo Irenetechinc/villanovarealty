@@ -79,17 +79,146 @@ const Subscription = () => {
                 >
                     Usage History
                 </button>
+                <button 
+                    onClick={() => setActiveTab('topup')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'topup' ? 'bg-cyan-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                >
+                    Buy Extra Credits
+                </button>
             </div>
         </div>
       </div>
 
-      {activeTab === 'plans' ? (
+      {activeTab === 'plans' && (
           <PlansSection currentPlan={wallet?.subscription_plan} refreshData={fetchSubscriptionData} />
-      ) : (
+      )}
+      
+      {activeTab === 'usage' && (
           <UsageSection logs={usageLogs} />
+      )}
+
+      {activeTab === 'topup' && (
+          <TopUpSection refreshData={fetchSubscriptionData} />
       )}
     </div>
   );
+};
+
+const TopUpSection = ({ refreshData }: any) => {
+    const packages = [
+        {
+            id: 'topup_600',
+            credits: 600,
+            price: 35,
+            popular: true
+        },
+        {
+            id: 'topup_300',
+            credits: 300,
+            price: 16
+        },
+        {
+            id: 'topup_100',
+            credits: 100,
+            price: 12
+        }
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800">
+                <h3 className="text-xl font-bold text-white mb-2">One-time Credit Top-ups</h3>
+                <p className="text-slate-400 text-sm">Purchase additional credits without changing your subscription plan. Credits never expire.</p>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {packages.map((pkg) => (
+                    <TopUpCard key={pkg.id} pkg={pkg} onSuccess={refreshData} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const TopUpCard = ({ pkg, onSuccess }: any) => {
+    const [userEmail, setUserEmail] = useState('');
+    
+    useEffect(() => {
+        supabase.auth.getUser().then(({ data }) => {
+            if (data.user) setUserEmail(data.user.email || '');
+        });
+    }, []);
+
+    const config = {
+        public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || '',
+        tx_ref: `topup_${pkg.id}_${Date.now()}`,
+        amount: pkg.price,
+        currency: 'USD',
+        payment_options: 'card,mobilemoney,ussd',
+        customer: {
+            email: userEmail,
+            name: 'AdRoom User',
+        },
+        customizations: {
+            title: `AdRoom Top-up`,
+            description: `${pkg.credits} Extra Credits`,
+            logo: 'https://villanovarealty.com/logo.png',
+        },
+    };
+
+    const handlePayment = useFlutterwave(config);
+
+    const onPay = () => {
+        handlePayment({
+            callback: async (response) => {
+                closePaymentModal();
+                if (response.status === 'successful') {
+                    const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+                    const { data: { user } } = await supabase.auth.getUser();
+                    
+                    await fetch(`${API_URL}/api/wallet/topup`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            admin_id: user?.id,
+                            package_id: pkg.id,
+                            flutterwave_ref: response.tx_ref
+                        })
+                    });
+                    
+                    alert(`Successfully added ${pkg.credits} credits!`);
+                    onSuccess();
+                }
+            },
+            onClose: () => {},
+        });
+    };
+
+    return (
+        <div className={`relative bg-slate-900 border ${pkg.popular ? 'border-cyan-500/50 shadow-lg shadow-cyan-900/20' : 'border-slate-800'} rounded-2xl p-6 flex flex-col items-center text-center transition-transform hover:-translate-y-1`}>
+            {pkg.popular && (
+                <div className="absolute -top-3 bg-cyan-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    BEST VALUE
+                </div>
+            )}
+            <div className="h-12 w-12 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+                <Zap className={`h-6 w-6 ${pkg.popular ? 'text-cyan-400' : 'text-slate-400'}`} />
+            </div>
+            <h3 className="text-3xl font-bold text-white mb-1">{pkg.credits}</h3>
+            <p className="text-sm text-slate-400 mb-6">Extra Credits</p>
+            
+            <div className="mt-auto w-full">
+                <button 
+                    onClick={onPay}
+                    className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${
+                        pkg.popular ? 'bg-cyan-600 hover:bg-cyan-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'
+                    }`}
+                >
+                    Buy for ${pkg.price}
+                </button>
+            </div>
+        </div>
+    );
 };
 
 const PlansSection = ({ currentPlan, refreshData }: any) => {
