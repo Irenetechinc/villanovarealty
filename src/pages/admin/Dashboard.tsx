@@ -720,7 +720,7 @@ const Dashboard = () => {
       
       <div className={`transition-all duration-300 ${activeTab !== 'adroom' ? (isSidebarCollapsed ? 'ml-20' : 'ml-64') : ''} ${activeTab === 'adroom' ? 'p-0 h-screen' : 'p-8 pt-24'}`}>
         {activeTab === 'analytics' && <AnalyticsDashboard />}
-        {activeTab === 'adroom' && <div className="pt-6 h-full"><AdRoom onExit={() => setActiveTab('analytics')} /></div>}
+        {activeTab === 'adroom' && <div className="pt-10 h-full"><AdRoom onExit={() => setActiveTab('analytics')} /></div>}
         {activeTab === 'auctions' && <AuctionManagement />}
         {activeTab === 'users' && <UserManagement />}
         

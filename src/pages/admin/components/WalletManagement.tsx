@@ -411,8 +411,8 @@ const FlutterwavePaymentButton = ({ config, onSuccess, onClose, text }: any) => 
   const handleClick = () => {
     // Debugging check
     if (!config.public_key) {
-      alert("Payment System Error: Missing Flutterwave Public Key. Please check your configuration.");
-      console.error("Flutterwave config missing public_key:", config);
+      alert("Payment System Error: Missing Flutterwave Public Key.\n\nEnsure 'VITE_FLUTTERWAVE_PUBLIC_KEY' is set in your environment variables.");
+      console.error("Flutterwave config missing public_key. Checked for: VITE_FLUTTERWAVE_PUBLIC_KEY");
       return;
     }
     
