@@ -6,6 +6,7 @@ import { facebookService } from '../services/facebook.js';
 import { botService } from '../services/botService.js';
 import { adRoomService } from '../services/adRoomService.js';
 import { strategyMonitorService } from '../services/strategyMonitorService.js';
+import { walletService } from '../services/wallet.js';
 import { supabaseAdmin } from '../supabase.js';
 
 const router = Router();

@@ -50,7 +50,7 @@ router.post('/verify', async (req, res) => {
 // Update Subscription (after payment)
 router.post('/subscription', async (req, res) => {
     try {
-        const { admin_id, plan, transaction_id } = req.body;
+        const { admin_id, plan } = req.body;
         
         if (!admin_id || !plan) {
             return res.status(400).json({ error: 'Missing admin_id or plan' });

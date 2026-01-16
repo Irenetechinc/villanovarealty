@@ -6,6 +6,7 @@ import {
   MessageSquare, Clock, BarChart3, Terminal, CheckCircle2, AlertOctagon, ArrowLeft
 } from 'lucide-react';
 import WalletManagement from './WalletManagement';
+import Subscription from './Subscription';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Interfaces ---

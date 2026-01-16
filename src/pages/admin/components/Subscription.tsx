@@ -1,20 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { CreditCard, Check, Zap, Crown, Calendar, History, AlertTriangle, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, Zap, Crown, Calendar, History } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useFlutterwave, closePaymentModal } from 'flutterwave-react-v3';
 
 const Subscription = () => {
   const [wallet, setWallet] = useState<any>(null);
   const [usageLogs, setUsageLogs] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'plans' | 'usage'>('plans');
+  const [activeTab, setActiveTab] = useState<'plans' | 'usage' | 'topup'>('plans');
 
   useEffect(() => {
     fetchSubscriptionData();
   }, []);
 
   const fetchSubscriptionData = async () => {
-    setIsLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
@@ -36,8 +34,6 @@ const Subscription = () => {
 
     } catch (error) {
       console.error('Error fetching subscription data:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -158,6 +154,7 @@ const TopUpCard = ({ pkg, onSuccess }: any) => {
         customer: {
             email: userEmail,
             name: 'AdRoom User',
+            phone_number: '',
         },
         customizations: {
             title: `AdRoom Top-up`,
@@ -288,6 +285,7 @@ const PricingCard = ({ plan, isCurrent, onSuccess }: any) => {
         customer: {
             email: userEmail,
             name: 'AdRoom User',
+            phone_number: '',
         },
         customizations: {
             title: `AdRoom ${plan.name}`,
