@@ -60,8 +60,11 @@ cron.schedule('* * * * *', async () => {
             continue;
           }
 
-          // 2. Publish to Facebook
-          logActivity(`Publishing post to Facebook Page ${settings.facebook_page_id}...`, 'info');
+          // 2. Publish to Facebook (Organic or Sponsored)
+          // For Paid Strategies, this is the retry/scheduled execution point.
+          // Note: If adRoomService already posted it instantly during approval, status would be 'posted' and cron won't see it.
+          // This cron handles the "Scheduled" posts or retries.
+          logActivity(`Publishing scheduled post to Facebook Page ${settings.facebook_page_id}...`, 'info');
           
           const platformPostId = await facebookService.publishPost(
             settings.facebook_page_id,
@@ -87,8 +90,17 @@ cron.schedule('* * * * *', async () => {
              logActivity(`Successfully published post ${post.id}. FB ID: ${platformPostId}`, 'success');
           }
         } catch (postError: any) {
-          logActivity(`Failed to publish post ${post.id}: ${postError.message}`, 'error');
-          await supabaseAdmin.from('adroom_posts').update({ status: 'failed' }).eq('id', post.id);
+          logActivity(`Failed to publish post ${post.id}: ${postError.message}. Retrying in next cycle...`, 'error');
+          // DO NOT set status to 'failed' immediately. Leave as 'pending' to allow retry.
+          // Only fail after X attempts (tracked via a new 'attempts' column if we added it, or just time).
+          // For now, let's update a retry counter if we had one, or just let it sit.
+          // To prevent infinite loops on bad data, we SHOULD fail after some time.
+          // Let's check if scheduled_time is > 24 hours ago?
+          const scheduleTime = new Date(post.scheduled_time).getTime();
+          if (Date.now() - scheduleTime > 24 * 60 * 60 * 1000) {
+              await supabaseAdmin.from('adroom_posts').update({ status: 'failed' }).eq('id', post.id);
+              logActivity(`Post ${post.id} marked as FAILED after 24h of retries.`, 'error');
+          }
         }
       }
     }

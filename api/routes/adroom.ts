@@ -168,10 +168,22 @@ router.post('/analyze', async (req, res) => {
   }
 });
 
-// 3. Approve Strategy
+    // 3. Approve Strategy
 router.post('/approve', async (req, res) => {
   try {
     const { admin_id, type, content, expected_outcome } = req.body;
+
+    // --- PAYMENT VERIFICATION (If Paid Strategy) ---
+    if (type === 'paid') {
+      const ESTIMATED_COST = 5000; // Define cost per paid strategy (e.g., NGN 5000)
+      
+      try {
+        // Verify and Deduct Funds
+        await walletService.deductFunds(admin_id, ESTIMATED_COST, 'ad_spend');
+      } catch (paymentError: any) {
+        return res.status(402).json({ error: `Payment Failed: ${paymentError.message}. Please fund your wallet.` });
+      }
+    }
 
     // Save selected strategy to DB
     const { data: strategy, error } = await supabaseAdmin

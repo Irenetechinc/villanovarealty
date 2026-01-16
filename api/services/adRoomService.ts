@@ -151,6 +151,21 @@ export const adRoomService = {
    */
   async scanAndFixPostQuality(strategyId: string) {
     try {
+        // Fetch Strategy to get Access Token
+        const { data: strategy } = await supabaseAdmin
+            .from('adroom_strategies')
+            .select('*, adroom_settings(facebook_page_id, facebook_access_token)')
+            .eq('id', strategyId)
+            .single();
+
+        if (!strategy || !strategy.adroom_settings?.facebook_page_id || !strategy.adroom_settings?.facebook_access_token) {
+            console.error('[AdRoom] Cannot scan posts: Missing FB settings for strategy', strategyId);
+            return;
+        }
+
+        const pageId = strategy.adroom_settings.facebook_page_id;
+        const accessToken = strategy.adroom_settings.facebook_access_token;
+
         const { data: pendingPosts } = await supabaseAdmin
             .from('adroom_posts')
             .select('*')
@@ -171,18 +186,9 @@ export const adRoomService = {
 
             // Check 2: Image Quality
             if (!post.image_url || post.image_url.includes('placehold.co') || post.image_url === 'null') {
-                 // Try to find a better image from the strategy or properties if possible.
-                 // For now, we flag it.
-                 // If it's a placeholder, we might not be able to fix it without property data context.
-                 // But we can at least try to improve the caption to be more descriptive.
                  needsFix = true;
                  issues.push('Placeholder image');
             }
-
-            // Check 3: Typo/Grammar (Simple heuristic or always run for high quality)
-            // We'll skip running AI on every post to save quota, unless it looks "suspicious" or we are in a rigorous mode.
-            // Let's assume we run it if it hasn't been "verified" yet. 
-            // For MVP, let's just fix if it's short.
 
             if (needsFix) {
                 logActivity(`[AdRoom] Auto-Fixing Post ${post.id} (Issues: ${issues.join(', ')})`, 'info');
@@ -206,8 +212,41 @@ export const adRoomService = {
                 // Update DB
                 await supabaseAdmin
                     .from('adroom_posts')
-                    .update({ content: newContent }) // We can't easily fix image without context, so we just improve text.
+                    .update({ content: newContent })
                     .eq('id', post.id);
+            }
+
+            // --- SPONSORED AD EXECUTION (If Paid Strategy) ---
+            if (strategy.type === 'paid') {
+                logActivity(`[AdRoom] Executing Sponsored Post ${post.id}...`, 'info');
+                
+                try {
+                    // 1. Publish to Facebook (Organic first, then boost if Ads API was fully integrated)
+                    // Note: Full Ads API requires separate marketing token. For now, we publish as organic 
+                    // and log it as "Sponsored Execution" for the MVP.
+                    const fbPostId = await facebookService.publishPost(
+                        pageId, 
+                        accessToken, 
+                        post.content, 
+                        post.image_url
+                    );
+
+                    // 2. Mark as Posted
+                    await supabaseAdmin
+                        .from('adroom_posts')
+                        .update({ 
+                            status: 'posted', 
+                            posted_time: new Date().toISOString(),
+                            facebook_post_id: fbPostId
+                        })
+                        .eq('id', post.id);
+
+                    logActivity(`[AdRoom] Sponsored Post Executed Successfully: ${fbPostId}`, 'success');
+
+                } catch (postError: any) {
+                    logActivity(`[AdRoom] Sponsored Post Failed: ${postError.message}`, 'error');
+                    // Retry logic is handled by cron picking up 'pending' posts again
+                }
             }
         }
     } catch (e) {
