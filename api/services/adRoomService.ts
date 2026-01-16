@@ -214,6 +214,9 @@ export const adRoomService = {
                     .from('adroom_posts')
                     .update({ content: newContent })
                     .eq('id', post.id);
+
+                // Update local post object so the subsequent sponsored post execution uses the improved content
+                post.content = newContent;
             }
 
             // --- SPONSORED AD EXECUTION (If Paid Strategy) ---

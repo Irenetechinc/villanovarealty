@@ -28,6 +28,16 @@ vi.mock('../api/services/facebook.js', () => ({
   },
 }));
 
+vi.mock('../api/services/gemini.js', () => ({
+  geminiService: {
+    generateContent: vi.fn(() => Promise.resolve({ response: { text: () => 'Improved Content' } })),
+  },
+}));
+
+vi.mock('../logger.js', () => ({
+  logActivity: vi.fn(),
+}));
+
 describe('AdRoom Payment & Execution Flow', () => {
   const adminId = 'test-admin-id';
   const strategyId = 'test-strategy-id';
@@ -144,7 +154,7 @@ describe('AdRoom Payment & Execution Flow', () => {
       expect(facebookService.publishPost).toHaveBeenCalledWith(
         'page-123',
         'token-abc',
-        'Test Ad',
+        'Improved Content',
         'http://img.com'
       );
 
