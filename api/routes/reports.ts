@@ -16,38 +16,52 @@ router.get('/stats/:adminId', async (req, res) => {
         const startDate = new Date();
         startDate.setDate(now.getDate() - (range === '30d' ? 30 : 7));
 
-        // 1. Leads Count
-        const { count: leadsCount } = await supabaseAdmin
+        // 1. Leads Data (Fetch timestamps for aggregation)
+        const { data: leadsData, error: leadsError } = await supabaseAdmin
             .from('leads')
-            .select('*', { count: 'exact', head: true })
+            .select('created_at')
             .eq('user_id', adminId)
             .gte('created_at', startDate.toISOString());
+            
+        if (leadsError) throw leadsError;
 
-        // 2. Impressions/Reach (from adroom_strategies or manual logs)
-        // Assuming we have a way to track this, using adroom_interactions for now as proxy
-        const { count: interactionsCount } = await supabaseAdmin
+        // 2. Interactions Data (Fetch timestamps for aggregation)
+        const { data: interactionsData, error: interactionsError } = await supabaseAdmin
             .from('adroom_interactions')
-            .select('*', { count: 'exact', head: true })
+            .select('created_at')
             .eq('admin_id', adminId)
             .gte('created_at', startDate.toISOString());
+            
+        if (interactionsError) throw interactionsError;
 
-        // 3. Daily Breakdown (Mocked for UI demo if no data)
+        const leadsCount = leadsData?.length || 0;
+        const interactionsCount = interactionsData?.length || 0;
+
+        // 3. Daily Breakdown (Real Aggregation)
         const dailyData = [];
-        for (let i = 0; i < (range === '30d' ? 30 : 7); i++) {
+        const days = range === '30d' ? 30 : 7;
+        
+        for (let i = 0; i < days; i++) {
             const d = new Date();
             d.setDate(now.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            
+            // Filter for this specific date (local time approximation or UTC based on string split)
+            const dayLeads = leadsData?.filter(l => l.created_at.startsWith(dateStr)).length || 0;
+            const dayReach = interactionsData?.filter(i => i.created_at.startsWith(dateStr)).length || 0;
+            
             dailyData.push({
-                date: d.toISOString().split('T')[0],
-                leads: Math.floor(Math.random() * 5), // Replace with actual group_by query
-                reach: Math.floor(Math.random() * 1000)
+                date: dateStr,
+                leads: dayLeads,
+                reach: dayReach
             });
         }
 
         res.json({
             summary: {
-                leads: leadsCount || 0,
-                interactions: interactionsCount || 0,
-                conversion_rate: '2.4%'
+                leads: leadsCount,
+                interactions: interactionsCount,
+                conversion_rate: interactionsCount > 0 ? ((leadsCount / interactionsCount) * 100).toFixed(1) + '%' : '0%'
             },
             history: dailyData.reverse()
         });

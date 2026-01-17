@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../supabase.js';
+import nodemailer from 'nodemailer';
 
 interface NotificationPayload {
   userId: string;
@@ -72,14 +73,35 @@ export const notificationService = {
       </div>
     `;
 
-    // TODO: Integrate actual email provider (Resend, SendGrid, etc.)
-    // For now, we simulate a successful send with latency < 5s check
-    console.log(`[EMAIL SERVICE] Sending to ${email}:`, {
-        subject: `AdRoom Alert: ${payload.title}`,
-        html: htmlContent
-    });
+    // Attempt to send via Nodemailer if configured
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        try {
+            const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: Number(process.env.SMTP_PORT) || 587,
+                secure: false, // true for 465, false for other ports
+                auth: {
+                    user: process.env.SMTP_USER,
+                    pass: process.env.SMTP_PASS,
+                },
+            });
 
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+            await transporter.sendMail({
+                from: process.env.SMTP_FROM || '"AdRoom AI" <notifications@villanovarealty.com>',
+                to: email,
+                subject: `AdRoom Alert: ${payload.title}`,
+                html: htmlContent,
+            });
+            console.log(`[EMAIL SENT] To: ${email}`);
+        } catch (err) {
+            console.error('[EMAIL ERROR] Nodemailer failed:', err);
+        }
+    } else {
+        // Fallback / Dev Mode
+        console.log(`[EMAIL SERVICE] (Simulated) Sending to ${email}:`, {
+            subject: `AdRoom Alert: ${payload.title}`,
+            // content truncated for log
+        });
+    }
   }
 };
