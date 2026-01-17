@@ -327,10 +327,8 @@ export const walletService = {
           creditsToAdd = 600;
           durationMonths = 1;
       } else if (plan === 'pro_yearly') {
-          creditsToAdd = 600 * 12; // Or give monthly? Usually give bulk or reset monthly. 
-          // User said "600 credits", implying monthly. Let's assume we set a flag to auto-refill.
-          // For simplicity MVP, let's just add the first month's batch.
-          creditsToAdd = 600; 
+          // Since we don't have a monthly refill cron job yet, allocate the full year's credits upfront
+          creditsToAdd = 600 * 12; 
           durationMonths = 12;
       } else {
           // Free
@@ -341,9 +339,12 @@ export const walletService = {
       const endDate = new Date();
       endDate.setMonth(endDate.getMonth() + durationMonths);
 
+      // Add to existing credits (don't overwrite)
+      const newTotalCredits = (wallet.credits || 0) + creditsToAdd;
+
       await supabaseAdmin.from('wallets').update({
           subscription_plan: plan,
-          credits: creditsToAdd, // Reset/Add? Let's Reset to plan limit for now
+          credits: newTotalCredits,
           subscription_cycle_start: new Date(),
           subscription_cycle_end: endDate
       }).eq('id', wallet.id);

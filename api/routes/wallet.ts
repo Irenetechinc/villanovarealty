@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { walletService } from '../services/wallet.ts';
+import { walletService } from '../services/wallet.js';
 
 const router = Router();
 
