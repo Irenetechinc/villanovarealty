@@ -490,16 +490,16 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
       <motion.div 
         initial={{ x: -100 }}
         animate={{ x: 0 }}
-        className="w-20 lg:w-64 bg-slate-900 border-r border-slate-800 flex flex-col items-center lg:items-stretch py-6 z-20 shadow-2xl"
+        className="w-20 lg:w-64 bg-slate-900 border-r border-slate-800 flex flex-col items-center lg:items-stretch py-6 z-20 shadow-2xl overflow-y-auto scrollbar-none"
       >
-        <div className="mb-8 px-4 flex items-center justify-center lg:justify-start space-x-3">
+        <div className="mb-8 px-4 flex items-center justify-center lg:justify-start space-x-3 shrink-0">
             <div className="h-10 w-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
                 <Bot className="h-6 w-6 text-cyan-400" />
             </div>
             <span className="hidden lg:block text-xl font-bold tracking-wider text-white">AdRoom<span className="text-cyan-400">.AI</span></span>
         </div>
 
-        <nav className="flex-1 space-y-2 px-2">
+        <nav className="flex-1 space-y-2 px-2 shrink-0">
             {/* Back to Main Admin Button */}
             <button
                 onClick={onExit}
@@ -512,6 +512,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             {[
                 { id: 'dashboard', icon: Activity, label: 'Command Center' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
+                { id: 'reports', icon: BarChart3, label: 'Reports & Analytics' },
                 { id: 'chat', icon: MessageSquare, label: 'Neural Chat' },
                 { id: 'wallet', icon: Wallet, label: 'Ads Wallet' },
                 { id: 'subscription', icon: Zap, label: 'Subscription & Usage' },
@@ -533,7 +534,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             ))}
         </nav>
 
-        <div className="px-4 mt-auto">
+        <div className="px-4 mt-auto shrink-0 pt-4">
              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
                  <div className="flex items-center justify-between mb-2">
                      <span className="text-xs text-slate-400">System Status</span>
@@ -557,7 +558,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="flex-1 overflow-y-auto p-4 lg:p-8 z-10 scrollbar-thin scrollbar-thumb-slate-700"
+                className="flex-1 overflow-y-auto p-4 lg:p-8 z-10 scrollbar-thin scrollbar-thumb-slate-700 [&::-webkit-scrollbar]:w-1.5"
             >
                 <header className="flex justify-between items-center mb-8">
                     <div>
