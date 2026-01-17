@@ -511,7 +511,8 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 { id: 'dashboard', icon: Activity, label: 'Command Center' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
                 { id: 'chat', icon: MessageSquare, label: 'Neural Chat' },
-                { id: 'wallet', icon: Wallet, label: 'Wallet' },
+                { id: 'wallet', icon: Wallet, label: 'Ads Wallet' },
+                { id: 'subscription', icon: Zap, label: 'Subscription & Usage' },
                 { id: 'settings', icon: Settings, label: 'Configuration' }
             ].map((item) => (
                 <button
