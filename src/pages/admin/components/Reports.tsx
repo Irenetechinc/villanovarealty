@@ -85,7 +85,7 @@ const Reports = () => {
                     </div>
                     <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded">+12%</span>
                 </div>
-                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary.leads}</h3>
+                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary?.leads || 0}</h3>
                 <p className="text-sm text-slate-400">Total Leads Generated</p>
             </div>
             <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
@@ -95,7 +95,7 @@ const Reports = () => {
                     </div>
                     <span className="text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded">+5.2%</span>
                 </div>
-                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary.interactions}</h3>
+                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary?.interactions || 0}</h3>
                 <p className="text-sm text-slate-400">Total Reach / Impressions</p>
             </div>
              <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl">
@@ -105,7 +105,7 @@ const Reports = () => {
                     </div>
                     <span className="text-xs text-slate-500">Avg</span>
                 </div>
-                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary.conversion_rate}</h3>
+                <h3 className="text-3xl font-bold text-white mb-1">{data?.summary?.conversion_rate || '0%'}</h3>
                 <p className="text-sm text-slate-400">Conversion Rate</p>
             </div>
         </div>
@@ -116,9 +116,9 @@ const Reports = () => {
                 <h3 className="text-white font-bold mb-6">Leads Trend</h3>
                 <div className="flex-1 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data?.history}>
+                        <BarChart data={data?.history || []}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => val.slice(5)} />
+                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => val ? val.slice(5) : ''} />
                             <YAxis stroke="#64748b" fontSize={10} />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff' }}
@@ -134,7 +134,7 @@ const Reports = () => {
                 <h3 className="text-white font-bold mb-6">Reach Growth</h3>
                 <div className="flex-1 w-full">
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={data?.history}>
+                        <AreaChart data={data?.history || []}>
                              <defs>
                                 <linearGradient id="colorReach" x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8}/>
@@ -142,7 +142,7 @@ const Reports = () => {
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => val.slice(5)} />
+                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(val) => val ? val.slice(5) : ''} />
                             <YAxis stroke="#64748b" fontSize={10} />
                             <Tooltip 
                                 contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff' }}
