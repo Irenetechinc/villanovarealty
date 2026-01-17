@@ -277,9 +277,7 @@ const PricingCard = ({ plan, isCurrent, onSuccess }: any) => {
     const config = {
         public_key: import.meta.env.VITE_FLUTTERWAVE_PUBLIC_KEY || '',
         tx_ref: `sub_${plan.id}_${Date.now()}`,
-        amount: plan.price * 1500, // Convert USD to NGN approx? Or charge in USD?
-        // Flutterwave supports USD. Let's use USD if allowed, or convert. 
-        // User quoted dollars ($45). Let's assume USD currency.
+        amount: plan.price, // Charge exact USD amount
         currency: 'USD',
         payment_options: 'card,mobilemoney,ussd',
         customer: {
@@ -303,26 +301,35 @@ const PricingCard = ({ plan, isCurrent, onSuccess }: any) => {
             callback: async (response) => {
                 closePaymentModal();
                 if (response.status === 'successful') {
-                    // Call backend to update subscription
+                    // Call backend to verify and update subscription
                     const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
                     const { data: { user } } = await supabase.auth.getUser();
                     const { data: { session } } = await supabase.auth.getSession();
                     
-                    await fetch(`${API_URL}/api/wallet/subscription`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session?.access_token}`
-                        },
-                        body: JSON.stringify({ 
-                            admin_id: user?.id,
-                            plan: plan.id,
-                            transaction_id: response.transaction_id
-                        })
-                    });
-                    
-                    alert(`Successfully upgraded to ${plan.name}!`);
-                    onSuccess();
+                    try {
+                        const res = await fetch(`${API_URL}/api/wallet/subscription`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${session?.access_token}`
+                            },
+                            body: JSON.stringify({ 
+                                admin_id: user?.id,
+                                plan: plan.id,
+                                flutterwave_ref: response.tx_ref // Send tx_ref for verification
+                            })
+                        });
+
+                        if (!res.ok) {
+                            const err = await res.json();
+                            throw new Error(err.error || 'Subscription update failed');
+                        }
+                        
+                        alert(`Successfully upgraded to ${plan.name}!`);
+                        onSuccess();
+                    } catch (err: any) {
+                        alert(`Error: ${err.message}`);
+                    }
                 }
             },
             onClose: () => {},

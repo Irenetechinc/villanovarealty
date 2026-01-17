@@ -294,7 +294,30 @@ export const walletService = {
   /**
    * Update Subscription Plan
    */
-  async updateSubscription(adminId: string, plan: 'free' | 'pro_monthly' | 'pro_yearly') {
+  async updateSubscription(adminId: string, plan: 'free' | 'pro_monthly' | 'pro_yearly', flutterwaveRef: string) {
+      // 1. Verify Payment with Flutterwave
+      if (plan !== 'free') {
+          if (!FLUTTERWAVE_SECRET_KEY) {
+              throw new Error('Server configuration error: Missing Flutterwave Secret Key');
+          }
+
+          const response = await axios.get(`https://api.flutterwave.com/v3/transactions/verify_by_reference?tx_ref=${flutterwaveRef}`, {
+              headers: { Authorization: `Bearer ${FLUTTERWAVE_SECRET_KEY}` }
+          });
+
+          const responseBody = response.data;
+          if (responseBody.status !== 'success' || !responseBody.data || responseBody.data.status !== 'successful') {
+               throw new Error(`Payment verification failed: ${responseBody.message || 'Transaction not successful'}`);
+          }
+          
+          // Optional: Check amount
+          const paidAmount = responseBody.data.amount;
+          const expectedAmount = plan === 'pro_monthly' ? 45 : 405;
+          if (paidAmount < expectedAmount) {
+              throw new Error(`Insufficient payment. Expected ${expectedAmount}, received ${paidAmount}`);
+          }
+      }
+
       const wallet = await this.getBalance(adminId);
       
       let creditsToAdd = 0;

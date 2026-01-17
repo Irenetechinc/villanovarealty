@@ -50,18 +50,13 @@ router.post('/verify', async (req, res) => {
 // Update Subscription (after payment)
 router.post('/subscription', async (req, res) => {
     try {
-        const { admin_id, plan } = req.body;
+        const { admin_id, plan, flutterwave_ref } = req.body;
         
-        if (!admin_id || !plan) {
-            return res.status(400).json({ error: 'Missing admin_id or plan' });
+        if (!admin_id || !plan || !flutterwave_ref) {
+            return res.status(400).json({ error: 'Missing admin_id, plan, or flutterwave_ref' });
         }
-
-        // 1. Verify Payment with Flutterwave (Recommended)
-        // For now, we trust the transaction_id if provided, or verify if we have keys.
-        // Ideally: walletService.verifySubscriptionPayment(transaction_id)
         
-        // 2. Update Plan
-        await walletService.updateSubscription(admin_id, plan);
+        await walletService.updateSubscription(admin_id, plan, flutterwave_ref);
         
         res.json({ success: true });
     } catch (error) {
