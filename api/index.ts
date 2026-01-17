@@ -6,6 +6,7 @@ import authRouter from './routes/auth.js';
 import analyticsRouter from './routes/analytics.js';
 import adroomRouter from './routes/adroom.js';
 import walletRouter from './routes/wallet.js';
+import reportsRouter from './routes/reports.js';
 import { automation } from './cron.js';
 import { botService } from './services/botService.js';
 
@@ -32,6 +33,11 @@ app.use('/api/auth', authRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/adroom', adroomRouter);
 app.use('/api/wallet', walletRouter);
+app.use('/api/reports', reportsRouter);
+
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', message: 'Villanova Realty API is running' });
+});
 
 // Serve Static Frontend (Production)
 if (process.env.NODE_ENV === 'production') {

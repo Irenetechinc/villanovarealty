@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import WalletManagement from './WalletManagement';
 import Subscription from './Subscription';
+import Reports from './Reports';
+import Notifications from './Notifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
 // --- Interfaces ---
@@ -59,7 +61,7 @@ interface Insights {
 
 const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   // State
-  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor' | 'subscription'>('dashboard');
+  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor' | 'subscription' | 'reports'>('dashboard');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -562,7 +564,8 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                         <h1 className="text-3xl font-bold text-white mb-1">Mission Control</h1>
                         <p className="text-slate-400 text-sm">Real-time autonomous marketing overview</p>
                     </div>
-                    <div className="flex space-x-3">
+                    <div className="flex space-x-3 items-center">
+                        <Notifications />
                         <button onClick={runTestSequence} className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-colors">
                             <PlayCircle className="h-4 w-4 text-cyan-400" />
                             <span>Run Diagnostics</span>
@@ -892,6 +895,21 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                  <div className="max-w-6xl mx-auto">
                      <h1 className="text-2xl font-bold text-white mb-6">Subscription & Credit Usage</h1>
                      <Subscription />
+                 </div>
+             </motion.div>
+        )}
+
+        {/* VIEW: REPORTS */}
+        {view === 'reports' && (
+             <motion.div 
+                key="reports"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="h-full overflow-y-auto p-8 bg-slate-950"
+             >
+                 <div className="max-w-6xl mx-auto">
+                     <Reports />
                  </div>
              </motion.div>
         )}
