@@ -492,11 +492,11 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
         animate={{ x: 0 }}
         className="w-20 lg:w-64 bg-slate-900 border-r border-slate-800 flex flex-col items-center lg:items-stretch py-6 z-20 shadow-2xl h-full"
       >
-        <div className="mb-8 px-4 flex items-center justify-center lg:justify-start space-x-3 shrink-0">
+        <div className="mb-8 px-4 pt-4 flex items-center justify-center lg:justify-start space-x-3 shrink-0">
             <div className="h-10 w-10 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
                 <Bot className="h-6 w-6 text-cyan-400" />
             </div>
-            <span className="hidden lg:block text-xl font-bold tracking-wider text-white">AdRoom<span className="text-cyan-400">.AI</span></span>
+            <span className="hidden lg:block text-xl font-bold tracking-wider text-white">AdRoom</span>
         </div>
 
         <nav className="flex-1 w-full space-y-2 px-2 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent">
@@ -510,10 +510,10 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             </button>
 
             {[
+                { id: 'chat', icon: MessageSquare, label: 'Chat' },
                 { id: 'dashboard', icon: Activity, label: 'Dashboard' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
                 { id: 'reports', icon: BarChart3, label: 'Reports & Analytics' },
-                { id: 'chat', icon: MessageSquare, label: 'Chat' },
                 { id: 'wallet', icon: Wallet, label: 'Ads Wallet' },
                 { id: 'subscription', icon: Zap, label: 'Subscription & Usage' },
                 { id: 'settings', icon: Settings, label: 'Configuration' }
@@ -563,7 +563,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 <header className="flex justify-between items-center mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-white mb-1">Mission Control</h1>
-                        <p className="text-slate-400 text-sm">Real-time autonomous marketing overview</p>
+                        <p className="text-slate-400 text-sm">Real-time autonomous marketing agent overview</p>
                     </div>
                     <div className="flex space-x-3 items-center">
                         <Notifications />
@@ -643,20 +643,43 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                             {recentActivity.length === 0 ? (
                                 <div className="text-slate-600 italic">No recent activity recorded. Waiting for triggers...</div>
                             ) : (
-                                recentActivity.map((log) => (
-                                    <motion.div 
-                                        initial={{ opacity: 0, x: -10 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        key={log.id} 
-                                        className="flex space-x-2 border-b border-white/5 pb-1"
-                                    >
-                                        <span className="text-slate-500">[{new Date(log.created_at).toLocaleTimeString()}]</span>
-                                        <span className={log.type === 'message' ? 'text-blue-400' : 'text-green-400'}>
-                                            {log.type.toUpperCase()}:
-                                        </span>
-                                        <span className="text-slate-300">{log.content}</span>
-                                    </motion.div>
-                                ))
+                                recentActivity.map((log) => {
+                                    let content = { user: '', bot: log.content };
+                                    try {
+                                        const parsed = JSON.parse(log.content);
+                                        if (parsed.user && parsed.bot) {
+                                            content = parsed;
+                                        }
+                                    } catch (e) {
+                                        // Legacy content (just the string)
+                                    }
+
+                                    return (
+                                        <motion.div 
+                                            initial={{ opacity: 0, x: -10 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            key={log.id} 
+                                            className="flex flex-col space-y-1 border-b border-white/5 pb-2 mb-1"
+                                        >
+                                            <div className="flex justify-between items-center text-[10px] text-slate-500">
+                                                <span>{log.type.toUpperCase()}</span>
+                                                <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                                            </div>
+                                            
+                                            {content.user && (
+                                                <div className="flex space-x-2">
+                                                    <span className="text-blue-400 font-bold shrink-0">User:</span>
+                                                    <span className="text-slate-300">{content.user}</span>
+                                                </div>
+                                            )}
+                                            
+                                            <div className="flex space-x-2">
+                                                <span className="text-green-400 font-bold shrink-0">AdRoom:</span>
+                                                <span className="text-slate-300">{content.bot}</span>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })
                             )}
                             {botStatus === 'analyzing' && <div className="text-cyan-400 animate-pulse">_ Processing market data...</div>}
                         </div>

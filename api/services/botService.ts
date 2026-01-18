@@ -303,7 +303,11 @@ export const botService = {
         await facebookService.replyToComment(commentId, replyText, settings.facebook_access_token);
 
         // Record
-        await this.recordInteraction(settings.admin_id, commentId, 'comment', replyText);
+        const interactionContent = JSON.stringify({
+            user: message,
+            bot: replyText
+        });
+        await this.recordInteraction(settings.admin_id, commentId, 'comment', interactionContent);
         this.lastProcessedId = commentId;
     } catch (err) {
         console.error('[Bot] Failed to process comment:', err);

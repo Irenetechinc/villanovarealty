@@ -12,8 +12,7 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  Bot,
-  CreditCard
+  Bot
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -32,7 +31,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const menuItems = [
     { id: 'analytics', label: 'Analytics', icon: LayoutDashboard },
     { id: 'adroom', label: 'AdRoom', icon: Bot },
-    { id: 'subscription', label: 'Subscription', icon: CreditCard },
     { id: 'properties', label: 'Properties', icon: Home },
     { id: 'projects', label: 'Projects', icon: Building2 },
     { id: 'auctions', label: 'Auctions', icon: Gavel },
