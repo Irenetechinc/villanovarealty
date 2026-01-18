@@ -510,10 +510,10 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             </button>
 
             {[
-                { id: 'dashboard', icon: Activity, label: 'Command Center' },
+                { id: 'dashboard', icon: Activity, label: 'Dashboard' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
                 { id: 'reports', icon: BarChart3, label: 'Reports & Analytics' },
-                { id: 'chat', icon: MessageSquare, label: 'Neural Chat' },
+                { id: 'chat', icon: MessageSquare, label: 'Chat' },
                 { id: 'wallet', icon: Wallet, label: 'Ads Wallet' },
                 { id: 'subscription', icon: Zap, label: 'Subscription & Usage' },
                 { id: 'settings', icon: Settings, label: 'Configuration' }
@@ -805,7 +805,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex flex-col h-full bg-slate-950"
+                className="flex flex-col h-full bg-slate-950 pt-16 lg:pt-8"
             >
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
                     {messages.map((msg) => (
@@ -922,7 +922,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="h-full overflow-y-auto p-8 bg-slate-950"
+                className="h-full overflow-y-auto p-8 bg-slate-950 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent"
              >
                  <div className="max-w-4xl mx-auto">
                      <h1 className="text-2xl font-bold text-white mb-6">Ads Wallet Management</h1>
