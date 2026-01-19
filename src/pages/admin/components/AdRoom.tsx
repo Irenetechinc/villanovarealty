@@ -93,6 +93,11 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   const [insights, setInsights] = useState<Insights>({ reach: 0, engagement: 0 });
   const [analyzingInsights, setAnalyzingInsights] = useState(false);
   const [strategyHealth, setStrategyHealth] = useState<any[]>([]);
+  
+  // Pagination for logs
+  const [activityPage, setActivityPage] = useState(0);
+  const [hasMoreActivity, setHasMoreActivity] = useState(true);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
 
   // UI State
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -268,7 +273,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
       fetchStrategyPosts(strategy.id);
   };
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (loadMore = false) => {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
@@ -282,15 +287,29 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
         
         setPendingPosts(posts || []);
 
-        // 2. Get Recent Activity (Interactions)
+        // 2. Get Recent Activity (Interactions) with Pagination
+        // If loadMore is true, we fetch the NEXT page. If false, we reset to page 0.
+        const page = loadMore ? activityPage + 1 : 0;
+        const pageSize = 20;
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
+
         const { data: activity } = await supabase
             .from('adroom_interactions')
             .select('*')
             .eq('admin_id', user.id)
             .order('created_at', { ascending: false })
-            .limit(10);
+            .range(from, to);
         
-        setRecentActivity(activity || []);
+        if (activity) {
+            if (loadMore) {
+                setRecentActivity(prev => [...prev, ...activity]);
+            } else {
+                setRecentActivity(activity);
+            }
+            setActivityPage(page);
+            setHasMoreActivity(activity.length === pageSize);
+        }
 
         // 3. Get Active Strategy
         const { data: strategy } = await supabase
@@ -318,6 +337,16 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
     } catch (error) {
         console.error('Dashboard fetch error:', error);
     }
+  };
+
+  const handleLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+      // Check if scrolled to bottom (with small buffer)
+      if (scrollHeight - scrollTop <= clientHeight + 50) {
+          if (hasMoreActivity && !isLoading) {
+              fetchDashboardData(true);
+          }
+      }
   };
 
   const initChat = async () => {
@@ -721,7 +750,11 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                 <div className="h-2.5 w-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
                             </div>
                         </div>
-                        <div className="flex-1 p-4 font-mono text-xs space-y-2 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent bg-black/40">
+                        <div 
+                            ref={logsContainerRef}
+                            onScroll={handleLogsScroll}
+                            className="flex-1 p-4 font-mono text-xs space-y-2 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent bg-black/40"
+                        >
                             {recentActivity.length === 0 ? (
                                 <div className="text-slate-600 italic">No recent activity recorded. Waiting for triggers...</div>
                             ) : (
@@ -1194,10 +1227,11 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                                   </div>
                                               )}
                                               
-                                              {post.metrics && Object.keys(post.metrics).length > 0 && (
+                                              {post.metrics && (
                                                   <div className="mt-3 pt-3 border-t border-slate-700/50 flex gap-4 text-xs text-slate-400">
                                                       <span>Likes: {post.metrics.likes || 0}</span>
-                                                      <span>Comments: {post.metrics.comments || 0}</span>
+                                                      {/* Show total interactions count if available (comments + replies stored locally), else fallback to FB metric */}
+                                                      <span>Comments: {post.interactions ? post.interactions.length : (post.metrics.comments || 0)}</span>
                                                       <span>Shares: {post.metrics.shares || 0}</span>
                                                   </div>
                                               )}
