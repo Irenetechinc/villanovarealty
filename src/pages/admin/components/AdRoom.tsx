@@ -692,7 +692,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                 <div className="h-2.5 w-2.5 rounded-full bg-green-500/20 border border-green-500/50"></div>
                             </div>
                         </div>
-                        <div className="flex-1 p-4 font-mono text-xs space-y-2 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 bg-black/40">
+                        <div className="flex-1 p-4 font-mono text-xs space-y-2 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent bg-black/40">
                             {recentActivity.length === 0 ? (
                                 <div className="text-slate-600 italic">No recent activity recorded. Waiting for triggers...</div>
                             ) : (
