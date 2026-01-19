@@ -43,6 +43,9 @@ interface InteractionLog {
   content: string;
   created_at: string;
   facebook_id: string;
+  sender_role?: 'user' | 'bot';
+  user_name?: string;
+  post_id?: string;
 }
 
 interface Post {
@@ -51,6 +54,13 @@ interface Post {
     scheduled_time: string;
     status: 'pending' | 'posted' | 'failed';
     image_url?: string;
+    metrics?: {
+        likes?: number;
+        comments?: number;
+        shares?: number;
+    };
+    posted_time?: string;
+    interactions?: InteractionLog[]; // For displaying comments in modal
 }
 
 interface Insights {
@@ -99,13 +109,32 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
 
   // Helper to fetch posts for modal
   const fetchStrategyPosts = async (strategyId: string) => {
-      const { data } = await supabase
+      const { data: posts } = await supabase
           .from('adroom_posts')
           .select('*')
           .eq('strategy_id', strategyId)
           .order('scheduled_time', { ascending: true });
+
+      if (!posts) {
+          setSelectedStrategyPosts([]);
+          return;
+      }
+
+      // Fetch interactions for these posts (comments)
+      const postIds = posts.map(p => p.id);
+      const { data: interactions } = await supabase
+          .from('adroom_interactions')
+          .select('*')
+          .in('post_id', postIds)
+          .order('created_at', { ascending: true });
+
+      // Merge interactions into posts
+      const postsWithInteractions = posts.map(post => ({
+          ...post,
+          interactions: interactions?.filter(i => i.post_id === post.id) || []
+      }));
       
-      setSelectedStrategyPosts(data || []);
+      setSelectedStrategyPosts(postsWithInteractions);
   };
 
   // --- Initialization & Real-time ---
@@ -697,14 +726,27 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                 <div className="text-slate-600 italic">No recent activity recorded. Waiting for triggers...</div>
                             ) : (
                                 recentActivity.map((log) => {
-                                    let content = { user: '', bot: log.content };
-                                    try {
-                                        const parsed = JSON.parse(log.content);
-                                        if (parsed.user && parsed.bot) {
-                                            content = parsed;
+                                    // Determine display data based on new schema or fallback to legacy JSON parsing
+                                    let displayData = {
+                                        user: log.sender_role === 'user' ? (log.content) : '',
+                                        bot: log.sender_role === 'bot' ? (log.content) : '',
+                                        userName: log.user_name || 'User'
+                                    };
+
+                                    // Legacy Support: If sender_role is null/bot but content is JSON string
+                                    if (!log.sender_role || (log.sender_role === 'bot' && log.content.startsWith('{'))) {
+                                        try {
+                                            const parsed = JSON.parse(log.content);
+                                            if (parsed.user && parsed.bot) {
+                                                displayData = {
+                                                    user: parsed.user,
+                                                    bot: parsed.bot,
+                                                    userName: 'User'
+                                                };
+                                            }
+                                        } catch (e) {
+                                            // Not JSON, standard content
                                         }
-                                    } catch (e) {
-                                        // Legacy content (just the string)
                                     }
 
                                     return (
@@ -719,17 +761,19 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                                 <span>{new Date(log.created_at).toLocaleTimeString()}</span>
                                             </div>
                                             
-                                            {content.user && (
+                                            {displayData.user && (
                                                 <div className="flex space-x-2">
-                                                    <span className="text-blue-400 font-bold shrink-0">User:</span>
-                                                    <span className="text-slate-300">{content.user}</span>
+                                                    <span className="text-blue-400 font-bold shrink-0">{displayData.userName}:</span>
+                                                    <span className="text-slate-300 break-words">{displayData.user}</span>
                                                 </div>
                                             )}
                                             
-                                            <div className="flex space-x-2">
-                                                <span className="text-green-400 font-bold shrink-0">AdRoom:</span>
-                                                <span className="text-slate-300">{content.bot}</span>
-                                            </div>
+                                            {displayData.bot && (
+                                                <div className="flex space-x-2">
+                                                    <span className="text-green-400 font-bold shrink-0">AdRoom:</span>
+                                                    <span className="text-slate-300 break-words">{displayData.bot}</span>
+                                                </div>
+                                            )}
                                         </motion.div>
                                     );
                                 })
@@ -1155,6 +1199,26 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                                       <span>Likes: {post.metrics.likes || 0}</span>
                                                       <span>Comments: {post.metrics.comments || 0}</span>
                                                       <span>Shares: {post.metrics.shares || 0}</span>
+                                                  </div>
+                                              )}
+
+                                              {/* Comments / Interactions Section */}
+                                              {post.interactions && post.interactions.length > 0 && (
+                                                  <div className="mt-3 bg-black/20 rounded p-2 border border-slate-700/30">
+                                                      <h5 className="text-[10px] uppercase text-slate-500 font-bold mb-2">Recent Comments</h5>
+                                                      <div className="space-y-2 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-700">
+                                                          {post.interactions.map((interaction: InteractionLog) => (
+                                                              <div key={interaction.id} className="text-xs">
+                                                                  <div className="flex justify-between">
+                                                                      <span className={`font-bold ${interaction.sender_role === 'bot' ? 'text-cyan-400' : 'text-blue-400'}`}>
+                                                                          {interaction.sender_role === 'bot' ? 'AdRoom' : (interaction.user_name || 'User')}
+                                                                      </span>
+                                                                      <span className="text-[10px] text-slate-600">{new Date(interaction.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                                  </div>
+                                                                  <p className="text-slate-300 ml-1">{interaction.content}</p>
+                                                              </div>
+                                                          ))}
+                                                      </div>
                                                   </div>
                                               )}
                                           </div>

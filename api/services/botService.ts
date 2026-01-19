@@ -197,6 +197,21 @@ export const botService = {
             return `${role}: ${msg.message}`;
         }).join('\n');
 
+        // Fetch user profile for name
+        const userProfile = await facebookService.getUserProfile(senderId, settings.facebook_access_token);
+        const userName = userProfile.name || 'User';
+
+        // Record User Message
+        await this.recordInteraction(
+            settings.admin_id,
+            messageId,
+            'message',
+            messageText,
+            'user',
+            null,
+            userName
+        );
+
         // 2. Fetch Knowledge Base (Available Properties)
         const { data: properties } = await supabaseAdmin
             .from('properties')
@@ -232,10 +247,18 @@ export const botService = {
         console.log(`[Bot] Generated AI Reply: "${replyText}"`);
 
         // Send Reply
-        await facebookService.sendMessage(senderId, replyText, settings.facebook_access_token);
+        const replyMsgId = await facebookService.sendMessage(senderId, replyText, settings.facebook_access_token);
         
-        // Record
-        await this.recordInteraction(settings.admin_id, messageId, 'message', replyText);
+        // Record Bot Reply
+        await this.recordInteraction(
+            settings.admin_id, 
+            replyMsgId || `reply_${Date.now()}`, 
+            'message', 
+            replyText,
+            'bot',
+            null,
+            'AdRoom Bot'
+        );
         this.lastProcessedId = messageId;
 
     } catch (err) {
@@ -290,7 +313,50 @@ export const botService = {
     const username = value.from.name || 'Unknown User';
     console.log(`[Bot] Webhook: New Comment from ${username}: "${message}"`);
 
+    // Lookup Post UUID
+    let postUuid = null;
+    if (value.post_id) {
+        // value.post_id usually format: PAGEID_POSTID. We might store just POSTID or full.
+        // AdRoom usually stores just POSTID if from graph, or full if from webhook.
+        // Let's try partial match or exact.
+        // adroom_posts.facebook_post_id
+        
+        // Try exact first
+        const { data: postData } = await supabaseAdmin
+            .from('adroom_posts')
+            .select('id')
+            .eq('facebook_post_id', value.post_id)
+            .single();
+            
+        if (postData) {
+            postUuid = postData.id;
+        } else {
+             // Try suffix match if post_id is composite
+             // e.g. value.post_id = "123_456", db has "456"
+             const parts = value.post_id.split('_');
+             if (parts.length > 1) {
+                  const { data: postData2 } = await supabaseAdmin
+                    .from('adroom_posts')
+                    .select('id')
+                    .eq('facebook_post_id', parts[1])
+                    .single();
+                  if (postData2) postUuid = postData2.id;
+             }
+        }
+    }
+
     try {
+        // Record User Comment
+        await this.recordInteraction(
+            settings.admin_id,
+            commentId,
+            'comment',
+            message,
+            'user',
+            postUuid,
+            username
+        );
+
         // AI Reply
         const aiReply = await geminiService.generateContent(`
             You are a friendly social media manager for Villanova Realty.
@@ -300,14 +366,18 @@ export const botService = {
         const replyText = aiReply.response.text().trim();
 
         // Reply
-        await facebookService.replyToComment(commentId, replyText, settings.facebook_access_token);
+        const replyId = await facebookService.replyToComment(commentId, replyText, settings.facebook_access_token);
 
-        // Record
-        const interactionContent = JSON.stringify({
-            user: message,
-            bot: replyText
-        });
-        await this.recordInteraction(settings.admin_id, commentId, 'comment', interactionContent);
+        // Record Bot Reply
+        await this.recordInteraction(
+            settings.admin_id, 
+            replyId || `reply_${commentId}`, 
+            'comment', 
+            replyText,
+            'bot',
+            postUuid,
+            'AdRoom Bot'
+        );
         this.lastProcessedId = commentId;
     } catch (err) {
         console.error('[Bot] Failed to process comment:', err);
@@ -431,14 +501,29 @@ export const botService = {
       }
   },
 
-  async recordInteraction(adminId: string, facebookId: string, type: 'comment' | 'message', content: string) {
+  async recordInteraction(
+    adminId: string, 
+    facebookId: string, 
+    type: 'comment' | 'message', 
+    content: string,
+    senderRole: 'user' | 'bot' = 'bot',
+    postId: string | null = null,
+    userName: string | null = null
+  ) {
     this.processedIds.add(facebookId);
+    
     await supabaseAdmin.from('adroom_interactions').insert({
         admin_id: adminId,
         facebook_id: facebookId,
         type,
-        content
+        content,
+        sender_role: senderRole,
+        post_id: postId,
+        user_name: userName
     });
-    logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
+    
+    if (senderRole === 'bot') {
+        logActivity(`[Bot] Auto-replied to ${type}: "${content}"`, 'success');
+    }
   }
 };
