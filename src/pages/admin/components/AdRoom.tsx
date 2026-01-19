@@ -3,7 +3,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { 
   Settings, Loader2, Send, Bot, Wallet, 
   Activity, PlayCircle, XCircle, Zap, 
-  MessageSquare, Clock, BarChart3, Terminal, CheckCircle2, AlertOctagon, ArrowLeft
+  MessageSquare, Clock, BarChart3, Terminal, CheckCircle2, AlertOctagon, ArrowLeft,
+  FileText, Eye, History
 } from 'lucide-react';
 import WalletManagement from './WalletManagement';
 import Subscription from './Subscription';
@@ -61,12 +62,18 @@ interface Insights {
 
 const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   // State
-  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor' | 'subscription' | 'reports'>('dashboard');
+  const [view, setView] = useState<'chat' | 'settings' | 'wallet' | 'dashboard' | 'monitor' | 'subscription' | 'reports' | 'history'>('dashboard');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [balance, setBalance] = useState(0);
   const [fbSettings, setFbSettings] = useState({ page_id: '', access_token: '' });
+  
+  // History & Modal State
+  const [campaignHistory, setCampaignHistory] = useState<any[]>([]);
+  const [selectedStrategy, setSelectedStrategy] = useState<any>(null);
+  const [showStrategyModal, setShowStrategyModal] = useState(false);
+  const [selectedStrategyPosts, setSelectedStrategyPosts] = useState<any[]>([]);
   
   // Dashboard Data
   const [activeStrategy, setActiveStrategy] = useState<any>(null);
@@ -185,6 +192,37 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
     } catch (e) {
         console.error('Health fetch error:', e);
     }
+  };
+
+  const fetchHistory = async () => {
+      try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (!user) return;
+          
+          const { data } = await supabase
+              .from('adroom_strategies')
+              .select('*')
+              .eq('admin_id', user.id)
+              .order('created_at', { ascending: false });
+          
+          setCampaignHistory(data || []);
+      } catch (e) {
+          console.error('History fetch error:', e);
+      }
+  };
+
+  const openStrategyDetails = async (strategy: any) => {
+      setSelectedStrategy(strategy);
+      setShowStrategyModal(true);
+      
+      // Fetch posts for this strategy
+      const { data } = await supabase
+          .from('adroom_posts')
+          .select('*')
+          .eq('strategy_id', strategy.id)
+          .order('scheduled_time', { ascending: true });
+          
+      setSelectedStrategyPosts(data || []);
   };
 
   const fetchDashboardData = async () => {
@@ -512,6 +550,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
             {[
                 { id: 'chat', icon: MessageSquare, label: 'Chat' },
                 { id: 'dashboard', icon: Activity, label: 'Dashboard' },
+                { id: 'history', icon: History, label: 'Campaign History' },
                 { id: 'monitor', icon: CheckCircle2, label: 'Strategy Monitor' },
                 { id: 'reports', icon: BarChart3, label: 'Reports & Analytics' },
                 { id: 'wallet', icon: Wallet, label: 'Ads Wallet' },
@@ -821,6 +860,76 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
              </motion.div>
         )}
 
+        {/* VIEW: HISTORY */}
+        {view === 'history' && (
+             <motion.div 
+                key="history"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 overflow-y-auto p-4 lg:p-8 z-10 scrollbar-thin scrollbar-thumb-slate-700"
+                onAnimationComplete={() => fetchHistory()}
+             >
+                 <h1 className="text-3xl font-bold text-white mb-8">Campaign History</h1>
+                 
+                 <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+                     <div className="overflow-x-auto">
+                         <table className="w-full text-left text-sm text-slate-400">
+                             <thead className="bg-slate-950 text-xs uppercase font-medium text-slate-500">
+                                 <tr>
+                                     <th className="px-6 py-4">Campaign Theme</th>
+                                     <th className="px-6 py-4">Type</th>
+                                     <th className="px-6 py-4">Status</th>
+                                     <th className="px-6 py-4">Date Created</th>
+                                     <th className="px-6 py-4 text-right">Actions</th>
+                                 </tr>
+                             </thead>
+                             <tbody className="divide-y divide-slate-800">
+                                 {campaignHistory.length === 0 ? (
+                                     <tr>
+                                         <td colSpan={5} className="px-6 py-8 text-center text-slate-500 italic">
+                                             No campaign history found.
+                                         </td>
+                                     </tr>
+                                 ) : (
+                                     campaignHistory.map((strat: any) => (
+                                         <tr key={strat.id} className="hover:bg-slate-800/50 transition-colors">
+                                             <td className="px-6 py-4 font-medium text-white">{strat.content?.theme || 'Untitled Strategy'}</td>
+                                             <td className="px-6 py-4">
+                                                 <span className={`px-2 py-1 rounded text-xs ${
+                                                     strat.type === 'paid' ? 'bg-purple-500/10 text-purple-400' : 'bg-green-500/10 text-green-400'
+                                                 }`}>
+                                                     {strat.type?.toUpperCase()}
+                                                 </span>
+                                             </td>
+                                             <td className="px-6 py-4">
+                                                 <span className={`px-2 py-1 rounded text-xs ${
+                                                     strat.status === 'active' ? 'bg-cyan-500/10 text-cyan-400' : 
+                                                     strat.status === 'completed' ? 'bg-slate-700 text-slate-300' :
+                                                     'bg-red-500/10 text-red-400'
+                                                 }`}>
+                                                     {strat.status?.toUpperCase()}
+                                                 </span>
+                                             </td>
+                                             <td className="px-6 py-4">{new Date(strat.created_at).toLocaleDateString()}</td>
+                                             <td className="px-6 py-4 text-right">
+                                                 <button 
+                                                     onClick={() => openStrategyDetails(strat)}
+                                                     className="text-cyan-400 hover:text-white transition-colors flex items-center justify-end w-full"
+                                                 >
+                                                     <Eye className="h-4 w-4 mr-1" /> View Details
+                                                 </button>
+                                             </td>
+                                         </tr>
+                                     ))
+                                 )}
+                             </tbody>
+                         </table>
+                     </div>
+                 </div>
+             </motion.div>
+        )}
+
         {/* VIEW: CHAT */}
         {view === 'chat' && (
             <motion.div 
@@ -958,6 +1067,95 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
       </div>
 
       {/* MODALS */}
+      {showStrategyModal && selectedStrategy && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-slate-700 w-full max-w-4xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl flex flex-col">
+                  <div className="bg-slate-950 p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
+                      <div>
+                          <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                              {selectedStrategy.content?.theme}
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                  selectedStrategy.type === 'paid' ? 'bg-purple-500/20 text-purple-400' : 'bg-green-500/20 text-green-400'
+                              }`}>{selectedStrategy.type?.toUpperCase()}</span>
+                          </h3>
+                          <p className="text-slate-400 text-sm mt-1">Goal: {selectedStrategy.content?.goal}</p>
+                      </div>
+                      <button onClick={() => setShowStrategyModal(false)}><XCircle className="h-6 w-6 text-slate-500 hover:text-white" /></button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto p-6 space-y-8 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent">
+                      {/* Overview */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                              <p className="text-slate-500 text-xs uppercase mb-1">Duration</p>
+                              <p className="text-white font-medium">{selectedStrategy.content?.duration}</p>
+                          </div>
+                          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                              <p className="text-slate-500 text-xs uppercase mb-1">Status</p>
+                              <p className="text-white font-medium capitalize">{selectedStrategy.status}</p>
+                          </div>
+                          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                              <p className="text-slate-500 text-xs uppercase mb-1">Expected Outcome</p>
+                              <p className="text-white font-medium">{selectedStrategy.content?.expected_outcome}</p>
+                          </div>
+                      </div>
+
+                      {/* Content Plan */}
+                      <div>
+                          <h4 className="text-lg font-bold text-white mb-4 flex items-center">
+                              <FileText className="h-5 w-5 mr-2 text-cyan-400" />
+                              Executed & Scheduled Content
+                          </h4>
+                          <div className="space-y-4">
+                              {selectedStrategyPosts.length > 0 ? (
+                                  selectedStrategyPosts.map((post, idx) => (
+                                      <div key={post.id} className="bg-slate-800/30 border border-slate-700 rounded-lg p-4 flex gap-4">
+                                          <div className="shrink-0 w-12 h-12 bg-slate-800 rounded flex items-center justify-center font-bold text-slate-500">
+                                              #{idx + 1}
+                                          </div>
+                                          <div className="flex-1">
+                                              <div className="flex justify-between items-start mb-2">
+                                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                                      post.status === 'posted' ? 'bg-green-500/20 text-green-400' :
+                                                      post.status === 'failed' ? 'bg-red-500/20 text-red-400' :
+                                                      'bg-yellow-500/20 text-yellow-400'
+                                                  }`}>
+                                                      {post.status.toUpperCase()}
+                                                  </span>
+                                                  <span className="text-xs text-slate-400">
+                                                      {post.posted_time 
+                                                          ? `Posted: ${new Date(post.posted_time).toLocaleString()}` 
+                                                          : `Scheduled: ${new Date(post.scheduled_time).toLocaleString()}`
+                                                      }
+                                                  </span>
+                                              </div>
+                                              <p className="text-slate-300 text-sm mb-3">{post.content}</p>
+                                              {post.image_url && (
+                                                  <div className="relative h-32 w-full max-w-xs rounded-lg overflow-hidden border border-slate-700">
+                                                      <img src={post.image_url} alt="Post asset" className="object-cover w-full h-full" />
+                                                  </div>
+                                              )}
+                                              
+                                              {post.metrics && Object.keys(post.metrics).length > 0 && (
+                                                  <div className="mt-3 pt-3 border-t border-slate-700/50 flex gap-4 text-xs text-slate-400">
+                                                      <span>Likes: {post.metrics.likes || 0}</span>
+                                                      <span>Comments: {post.metrics.comments || 0}</span>
+                                                      <span>Shares: {post.metrics.shares || 0}</span>
+                                                  </div>
+                                              )}
+                                          </div>
+                                      </div>
+                                  ))
+                              ) : (
+                                  <div className="text-slate-500 italic">No posts found for this strategy.</div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {showTestModal && (
           <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
               <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-xl overflow-hidden shadow-2xl">
