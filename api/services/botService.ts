@@ -348,11 +348,27 @@ export const botService = {
   async checkComments(pageId: string, accessToken: string, _adminId: string) {
       try {
         const feedRes = await axios.get(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
-            params: { access_token: accessToken, limit: 5, fields: 'id,comments.limit(10){id,message,from,created_time}' }
+            params: { 
+                access_token: accessToken, 
+                limit: 10, 
+                fields: 'id,shares,comments.limit(10).summary(true){id,message,from,created_time},likes.summary(true)' 
+            }
         });
         
         const posts = feedRes.data.data || [];
         for (const post of posts) {
+            // 1. Update Metrics in DB (Real-time sync)
+            const likes = post.likes?.summary?.total_count || 0;
+            const comments = post.comments?.summary?.total_count || 0;
+            const shares = post.shares?.count || 0;
+
+            await supabaseAdmin.from('adroom_posts')
+                .update({ 
+                    metrics: { likes, comments, shares } 
+                })
+                .eq('facebook_post_id', post.id);
+
+            // 2. Process Comments
             if (post.comments && post.comments.data) {
                 for (const comment of post.comments.data) {
                     // Check if already processed OR queued

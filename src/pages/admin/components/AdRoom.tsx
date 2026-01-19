@@ -87,9 +87,26 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   // UI State
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const hasInitialized = useRef(false);
+  const selectedStrategyRef = useRef<any>(null); // Track selected strategy for realtime updates
   const [isTesting, setIsTesting] = useState(false);
   const [testLogs, setTestLogs] = useState<string[]>([]);
   const [showTestModal, setShowTestModal] = useState(false);
+
+  // Sync ref
+  useEffect(() => {
+      selectedStrategyRef.current = selectedStrategy;
+  }, [selectedStrategy]);
+
+  // Helper to fetch posts for modal
+  const fetchStrategyPosts = async (strategyId: string) => {
+      const { data } = await supabase
+          .from('adroom_posts')
+          .select('*')
+          .eq('strategy_id', strategyId)
+          .order('scheduled_time', { ascending: true });
+      
+      setSelectedStrategyPosts(data || []);
+  };
 
   // --- Initialization & Real-time ---
 
@@ -109,9 +126,14 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
     // REAL-TIME SUBSCRIPTION
     const channel = supabase
       .channel('adroom_realtime_v2')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'adroom_posts' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'adroom_posts' }, (payload: any) => {
           console.log('Realtime Post Update:', payload);
           fetchDashboardData();
+          
+          // Refresh modal if open and relevant
+          if (selectedStrategyRef.current && payload.new && payload.new.strategy_id === selectedStrategyRef.current.id) {
+              fetchStrategyPosts(selectedStrategyRef.current.id);
+          }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'adroom_strategies' }, () => {
            console.log('Realtime Strategy Update');
@@ -214,15 +236,7 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
   const openStrategyDetails = async (strategy: any) => {
       setSelectedStrategy(strategy);
       setShowStrategyModal(true);
-      
-      // Fetch posts for this strategy
-      const { data } = await supabase
-          .from('adroom_posts')
-          .select('*')
-          .eq('strategy_id', strategy.id)
-          .order('scheduled_time', { ascending: true });
-          
-      setSelectedStrategyPosts(data || []);
+      fetchStrategyPosts(strategy.id);
   };
 
   const fetchDashboardData = async () => {
