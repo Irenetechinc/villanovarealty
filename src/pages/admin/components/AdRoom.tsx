@@ -340,6 +340,74 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
     }
   };
 
+  // --- Derived State for Logs ---
+  
+  const groupedLogs = useMemo(() => {
+    const pairs: { user?: InteractionLog; bot?: InteractionLog }[] = [];
+    const processedIds = new Set<string>();
+
+    // recentActivity is sorted DESC (Newest First)
+    for (let i = 0; i < recentActivity.length; i++) {
+        const log = recentActivity[i];
+        if (processedIds.has(log.id)) continue;
+
+        // --- LEGACY JSON HANDLING ---
+        if ((!log.sender_role || log.sender_role === 'bot') && log.content.trim().startsWith('{')) {
+             try {
+                 const parsed = JSON.parse(log.content);
+                 if (parsed.user && parsed.bot) {
+                     pairs.push({
+                         user: { ...log, content: parsed.user, sender_role: 'user', user_name: 'User' },
+                         bot: { ...log, content: parsed.bot, sender_role: 'bot', id: log.id + '_bot' }
+                     });
+                     processedIds.add(log.id);
+                     continue;
+                 }
+             } catch (e) {
+                 // Not JSON, proceed standard logic
+             }
+        }
+        // -----------------------------
+
+        if (log.sender_role === 'bot') {
+            let userLog: InteractionLog | undefined;
+            
+            // 1. Try to find parent via parent_id
+            if (log.parent_id) {
+                userLog = recentActivity.find((l, idx) => idx > i && l.facebook_id === log.parent_id);
+            }
+            
+            // 2. Heuristic: Check immediate successor if it's a user message (legacy)
+            if (!userLog && i + 1 < recentActivity.length) {
+                const next = recentActivity[i+1];
+                if (next.sender_role === 'user' && !processedIds.has(next.id)) {
+                    // Check strict time proximity if needed, but for now assume stream continuity
+                    userLog = next;
+                }
+            }
+
+            if (userLog) {
+                pairs.push({ user: userLog, bot: log });
+                processedIds.add(log.id);
+                processedIds.add(userLog.id);
+            } else {
+                // Orphan Bot message
+                pairs.push({ bot: log });
+                processedIds.add(log.id);
+            }
+        } else if (log.sender_role === 'user') {
+            // Unpaired User message (Bot hasn't replied or reply is not in this batch)
+            pairs.push({ user: log });
+            processedIds.add(log.id);
+        } else {
+            // Legacy/Unknown: Treat as user content for visibility
+            pairs.push({ user: log });
+            processedIds.add(log.id);
+        }
+    }
+    return pairs;
+  }, [recentActivity]);
+
   const handleLogsScroll = (e: React.UIEvent<HTMLDivElement>) => {
       const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
       // Check if scrolled to bottom (with small buffer)
