@@ -209,7 +209,8 @@ export const botService = {
             messageText,
             'user',
             null,
-            userName
+            userName,
+            null
         );
 
         // 2. Fetch Knowledge Base (Available Properties)
@@ -257,7 +258,8 @@ export const botService = {
             replyText,
             'bot',
             null,
-            'AdRoom Bot'
+            'AdRoom Bot',
+            messageId // parentId is the User Message ID
         );
         this.lastProcessedId = messageId;
 
@@ -354,7 +356,8 @@ export const botService = {
             message,
             'user',
             postUuid,
-            username
+            username,
+            null
         );
 
         // AI Reply
@@ -376,7 +379,8 @@ export const botService = {
             replyText,
             'bot',
             postUuid,
-            'AdRoom Bot'
+            'AdRoom Bot',
+            commentId // parentId is the User Comment ID
         );
         this.lastProcessedId = commentId;
     } catch (err) {
@@ -508,7 +512,8 @@ export const botService = {
     content: string,
     senderRole: 'user' | 'bot' = 'bot',
     postId: string | null = null,
-    userName: string | null = null
+    userName: string | null = null,
+    parentId: string | null = null
   ) {
     this.processedIds.add(facebookId);
     
@@ -519,7 +524,8 @@ export const botService = {
         content,
         sender_role: senderRole,
         post_id: postId,
-        user_name: userName
+        user_name: userName,
+        parent_id: parentId
     });
     
     if (senderRole === 'bot') {

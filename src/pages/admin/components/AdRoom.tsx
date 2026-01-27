@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { 
   Settings, Loader2, Send, Bot, Wallet, 
@@ -46,6 +46,7 @@ interface InteractionLog {
   sender_role?: 'user' | 'bot';
   user_name?: string;
   post_id?: string;
+  parent_id?: string;
 }
 
 interface Post {
@@ -758,60 +759,49 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                             {recentActivity.length === 0 ? (
                                 <div className="text-slate-600 italic">No recent activity recorded. Waiting for triggers...</div>
                             ) : (
-                                recentActivity.map((log) => {
-                                    // Determine display data based on new schema or fallback to legacy JSON parsing
-                                    let displayData = {
-                                        user: log.sender_role === 'user' ? (log.content) : '',
-                                        bot: log.sender_role === 'bot' ? (log.content) : '',
-                                        userName: log.user_name || 'User'
-                                    };
-
-                                    // Legacy Support: If sender_role is null/bot but content is JSON string
-                                    if (!log.sender_role || (log.sender_role === 'bot' && log.content.startsWith('{'))) {
-                                        try {
-                                            const parsed = JSON.parse(log.content);
-                                            if (parsed.user && parsed.bot) {
-                                                displayData = {
-                                                    user: parsed.user,
-                                                    bot: parsed.bot,
-                                                    userName: 'User'
-                                                };
-                                            }
-                                        } catch (e) {
-                                            // Not JSON, standard content
-                                        }
-                                    }
-
-                                    return (
-                                        <motion.div 
-                                            initial={{ opacity: 0, x: -10 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            key={log.id} 
-                                            className="flex flex-col space-y-1 border-b border-white/5 pb-2 mb-1"
-                                        >
-                                            <div className="flex justify-between items-center text-[10px] text-slate-500">
-                                                <span>{log.type.toUpperCase()}</span>
-                                                <span>{new Date(log.created_at).toLocaleTimeString()}</span>
+                                groupedLogs.map((pair, idx) => (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: 5 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        key={pair.user?.id || pair.bot?.id || idx} 
+                                        className="flex flex-col space-y-2 border-b border-white/5 pb-3 mb-3 last:border-0"
+                                    >
+                                        {/* USER MESSAGE */}
+                                        {pair.user && (
+                                            <div className="flex flex-col items-start space-y-1">
+                                                <div className="flex items-center space-x-2 text-[10px] text-slate-500 pl-1">
+                                                    <span className="font-bold text-blue-400">{pair.user.user_name || 'User'}</span>
+                                                    <span>•</span>
+                                                    <span>{new Date(pair.user.created_at).toLocaleString()}</span>
+                                                </div>
+                                                <div className="bg-slate-800/60 p-2.5 rounded-lg rounded-tl-none text-slate-300 w-full max-w-[95%] border border-slate-700/50 leading-relaxed">
+                                                    {pair.user.content}
+                                                </div>
                                             </div>
-                                            
-                                            {displayData.user && (
-                                                <div className="flex space-x-2">
-                                                    <span className="text-blue-400 font-bold shrink-0">{displayData.userName}:</span>
-                                                    <span className="text-slate-300 break-words">{displayData.user}</span>
+                                        )}
+
+                                        {/* ADROOM RESPONSE */}
+                                        {pair.bot && (
+                                            <div className="flex flex-col items-end space-y-1 pl-8">
+                                                <div className="flex items-center space-x-2 text-[10px] text-slate-500 pr-1">
+                                                    <span>{new Date(pair.bot.created_at).toLocaleTimeString()}</span>
+                                                    <span>•</span>
+                                                    <span className="font-bold text-cyan-400">AdRoom</span>
                                                 </div>
-                                            )}
-                                            
-                                            {displayData.bot && (
-                                                <div className="flex space-x-2">
-                                                    <span className="text-green-400 font-bold shrink-0">AdRoom:</span>
-                                                    <span className="text-slate-300 break-words">{displayData.bot}</span>
+                                                <div className="bg-cyan-950/30 p-2.5 rounded-lg rounded-tr-none text-cyan-100 w-full max-w-[95%] border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.05)] leading-relaxed">
+                                                    {pair.bot.content}
                                                 </div>
-                                            )}
-                                        </motion.div>
-                                    );
-                                })
+                                            </div>
+                                        )}
+                                    </motion.div>
+                                ))
                             )}
-                            {botStatus === 'analyzing' && <div className="text-cyan-400 animate-pulse">_ Processing market data...</div>}
+                            {isLoading && hasMoreActivity && (
+                                <div className="flex justify-center py-2">
+                                    <Loader2 className="h-4 w-4 text-cyan-500 animate-spin" />
+                                </div>
+                            )}
+                            {botStatus === 'analyzing' && <div className="text-cyan-400 animate-pulse text-xs">_ Processing market data...</div>}
                         </div>
                     </div>
 
@@ -1241,17 +1231,48 @@ const AdRoom: React.FC<AdRoomProps> = ({ onExit }) => {
                                                   <div className="mt-3 bg-black/20 rounded p-2 border border-slate-700/30">
                                                       <h5 className="text-[10px] uppercase text-slate-500 font-bold mb-2">Recent Comments</h5>
                                                       <div className="space-y-2 max-h-32 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-slate-700">
-                                                          {post.interactions.map((interaction: InteractionLog) => (
-                                                              <div key={interaction.id} className="text-xs">
-                                                                  <div className="flex justify-between">
-                                                                      <span className={`font-bold ${interaction.sender_role === 'bot' ? 'text-cyan-400' : 'text-blue-400'}`}>
-                                                                          {interaction.sender_role === 'bot' ? 'AdRoom' : (interaction.user_name || 'User')}
-                                                                      </span>
-                                                                      <span className="text-[10px] text-slate-600">{new Date(interaction.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                          {post.interactions.map((interaction: InteractionLog) => {
+                                                              let displayContent = interaction.content;
+                                                              let displayName = interaction.sender_role === 'bot' ? 'AdRoom' : (interaction.user_name || 'User');
+                                                              let displayRole = interaction.sender_role || 'user';
+
+                                                              // Handle Legacy JSON
+                                                              if ((!interaction.sender_role || interaction.sender_role === 'bot') && interaction.content.trim().startsWith('{')) {
+                                                                  try {
+                                                                      const parsed = JSON.parse(interaction.content);
+                                                                      if (parsed.user && parsed.bot) {
+                                                                          // If legacy JSON, we just show the user part + bot part stacked? 
+                                                                          // Or just show "Legacy Interaction"
+                                                                          // Better: Render both lines
+                                                                          return (
+                                                                            <div key={interaction.id} className="text-xs space-y-1 border-b border-white/5 pb-1">
+                                                                                <div className="flex justify-between">
+                                                                                    <span className="font-bold text-blue-400">User</span>
+                                                                                    <span className="text-[10px] text-slate-600">{new Date(interaction.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                                                </div>
+                                                                                <p className="text-slate-300 ml-1 mb-1">{parsed.user}</p>
+                                                                                <div className="flex justify-between">
+                                                                                    <span className="font-bold text-cyan-400">AdRoom</span>
+                                                                                </div>
+                                                                                <p className="text-slate-300 ml-1">{parsed.bot}</p>
+                                                                            </div>
+                                                                          );
+                                                                      }
+                                                                  } catch(e) {}
+                                                              }
+
+                                                              return (
+                                                                  <div key={interaction.id} className="text-xs">
+                                                                      <div className="flex justify-between">
+                                                                          <span className={`font-bold ${displayRole === 'bot' ? 'text-cyan-400' : 'text-blue-400'}`}>
+                                                                              {displayName}
+                                                                          </span>
+                                                                          <span className="text-[10px] text-slate-600">{new Date(interaction.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                                      </div>
+                                                                      <p className="text-slate-300 ml-1">{displayContent}</p>
                                                                   </div>
-                                                                  <p className="text-slate-300 ml-1">{interaction.content}</p>
-                                                              </div>
-                                                          ))}
+                                                              );
+                                                          })}
                                                       </div>
                                                   </div>
                                               )}

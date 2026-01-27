@@ -7,23 +7,34 @@ describe('AdRoom Interactions System', () => {
     let testAdminId: string;
     let testPostId: string;
 
+    // Increase timeout for high latency environments
     beforeAll(async () => {
         // 1. Setup Test Admin
-        const { data: user } = await supabaseAdmin.auth.admin.createUser({
+        const { data: user, error: userError } = await supabaseAdmin.auth.admin.createUser({
             email: `test_adroom_${Date.now()}@example.com`,
             password: 'password123',
             email_confirm: true
         });
-        testAdminId = user.user!.id;
+        
+        if (userError || !user.user) {
+            console.error('Failed to create test user:', userError);
+            throw new Error('Test setup failed: Could not create user');
+        }
+        testAdminId = user.user.id;
 
         // 2. Setup Test Post
-        const { data: post } = await supabaseAdmin.from('adroom_posts').insert({
+        const { data: post, error: postError } = await supabaseAdmin.from('adroom_posts').insert({
             content: 'Test Post for Interactions',
             status: 'posted',
             facebook_post_id: '123456_789012'
         }).select().single();
+
+        if (postError || !post) {
+            console.error('Failed to create test post:', postError);
+            throw new Error('Test setup failed: Could not create post');
+        }
         testPostId = post.id;
-    });
+    }, 60000); // 60s timeout for setup
 
     it('should correctly record a USER comment with metadata', async () => {
         const commentId = `comment_${Date.now()}`;
@@ -37,7 +48,8 @@ describe('AdRoom Interactions System', () => {
             content,
             'user',
             testPostId,
-            userName
+            userName,
+            null
         );
 
         // Verify in DB
@@ -54,9 +66,10 @@ describe('AdRoom Interactions System', () => {
         expect(data.content).toBe(content);
     });
 
-    it('should correctly record a BOT reply', async () => {
+    it('should correctly record a BOT reply with PARENT ID', async () => {
         const replyId = `reply_${Date.now()}`;
         const content = "This is a bot test reply";
+        const parentId = "some_parent_id_123";
 
         await botService.recordInteraction(
             testAdminId,
@@ -65,7 +78,8 @@ describe('AdRoom Interactions System', () => {
             content,
             'bot',
             testPostId,
-            'AdRoom Bot'
+            'AdRoom Bot',
+            parentId
         );
 
         // Verify in DB
@@ -79,6 +93,7 @@ describe('AdRoom Interactions System', () => {
         expect(data.sender_role).toBe('bot');
         expect(data.post_id).toBe(testPostId);
         expect(data.content).toBe(content);
+        expect(data.parent_id).toBe(parentId);
     });
 
     afterAll(async () => {
